@@ -3114,6 +3114,7 @@ class GenMonitor():
 
     def trackExecve(self):
         self.toExecve(any_exec=True, run=False, linger=True) 
+
     def toExecve(self, prog=None, flist=None, binary=False, watch_exit=False, any_exec=False, run=True, linger=False):
         cell = self.cell_config.cell_context[self.target]
         if prog is not None:    
@@ -7091,6 +7092,7 @@ class GenMonitor():
             self.record_entry[self.target].watchSysenter()
         else:
             print('Reverse execution is not enabled.')
+            self.lgr.debug('recordEntry Reverse execution is not enabled.')
 
     def enableReverse(self, target=None):
         if target is None:
