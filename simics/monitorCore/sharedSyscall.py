@@ -599,9 +599,13 @@ class SharedSyscall():
             elif exit_info.msghdr is not None:
                 #msghdr = net.Msghdr(self.cpu, self.mem_utils, exit_info.retval_addr)
                 msghdr = exit_info.msghdr
+                self.lgr.debug('sharedSyscall %s call msghdr.getIovec' % socket_callname)
                 iovec = msghdr.getIovec()
-                byte_array = msghdr.getByteArray()
-                trace_msg = trace_msg+('\t FD: %d count: %d first buffer: 0x%x num_bytes read: %d' % (exit_info.old_fd, eax, iovec[0].base, len(byte_array)))
+                if len(iovec) > 0:
+                    self.lgr.debug('sharedSyscall %s call getByteArray' % socket_callname)
+                    byte_array = msghdr.getByteArray()
+                    self.lgr.debug('sharedSyscall %s back from call getByteArray' % socket_callname)
+                    trace_msg = trace_msg+('\t FD: %d count: %d first buffer: 0x%x num_bytes read: %d' % (exit_info.old_fd, eax, iovec[0].base, len(byte_array)))
                 if tid in self.trace_procs:
                     if self.traceProcs.isExternal(tid, exit_info.old_fd):
                         trace_msg = trace_msg +' EXTERNAL'
@@ -625,19 +629,23 @@ class SharedSyscall():
                         for i in range(limit):
                             base = self.mem_utils.readPtr(self.cpu, iov_addr)
                             length = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
-                            if remain > length:
-                                data_len = length
+                            if length < 0xffff:
+                                if remain > length:
+                                    data_len = length
+                                else:
+                                    data_len = remain
+                                remain = remain - data_len 
+                                iov_addr = iov_addr+iov_size
+                                if exit_info.retval_addr is None:
+                                    ''' TBD generalize this for use by prepInject'''
+                                    exit_info.retval_addr = base
+                                    exit_info.count = data_len
+                                self.lgr.debug('dataWatch recvmsg setRange base 0x%x len %d' % (base, data_len))
+                                if data_len > 0:
+                                    self.dataWatch.setRange(base, data_len, msg=trace_msg, max_len=length, fd=exit_info.old_fd, data_stream=True, kbuffer=self.kbuffer)
                             else:
-                                data_len = remain
-                            remain = remain - data_len 
-                            iov_addr = iov_addr+iov_size
-                            if exit_info.retval_addr is None:
-                                ''' TBD generalize this for use by prepInject'''
-                                exit_info.retval_addr = base
-                                exit_info.count = data_len
-                            self.lgr.debug('dataWatch recvmsg setRange base 0x%x len %d' % (base, data_len))
-                            if data_len > 0:
-                                self.dataWatch.setRange(base, data_len, msg=trace_msg, max_len=length, fd=exit_info.old_fd, data_stream=True, kbuffer=self.kbuffer)
+                                self.lgr.debug('dataWatch recvmsg length too large BROKEN')
+                                break
                         self.lgr.debug('recvmsg set dataWatch')
                         if my_syscall.linger: 
                             self.dataWatch.stopWatch() 
