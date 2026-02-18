@@ -693,7 +693,7 @@ class Syscall():
                     #proc_break = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys, 1, 0)
                     break_addrs.append(self.param.arm_entry)
                     self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break, 'syscall'))
-                if self.cpu.architecture == 'arm64' and hasattr(self.param, 'arm64_entry'):
+                if self.cpu.architecture == 'arm64' and hasattr(self.param, 'arm64_entry') and self.param.arm64_entry is not None:
                     proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm64_entry, 1, 0)
                     self.lgr.debug('syscall doBreaks set entry for arm64 proc_break 0x%x' % proc_break)
                     break_addrs.append(self.param.arm64_entry)
@@ -2497,6 +2497,12 @@ class Syscall():
             exit_info.retval_addr = frame['param3'] 
             exit_info.count = frame['param4'] 
             ida_msg = '%s tid:%s (%s) dirfd: %s fname: %s buf addr: 0x%x size: 0x%x cycle:0x%x' % (callname, tid, comm, dirfd, exit_info.fname, exit_info.retval_addr, exit_info.count, self.cpu.cycles)
+        elif callname in ['readlink']:
+            exit_info.fname_addr = frame['param1']
+            exit_info.fname = frame['param1'] = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
+            exit_info.retval_addr = frame['param2']
+            exit_info.count = frame['param3']
+            ida_msg = '%s %s tid:%s (%s) cycle:0x%x' % (callname, exit_info.fname, tid, comm, self.cpu.cycles)
         elif callname == 'chdir':
             exit_info.fname_addr = frame['param1']
             exit_info.fname = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
@@ -2523,6 +2529,8 @@ class Syscall():
             exit_info.flags = frame['param3']
             ida_msg = '%s tid:%s (%s) FD: %d path: %s mask: 0x%x' % (callname, tid, comm, exit_info.old_fd, exit_info.fname, exit_info.flags) 
 
+        elif callname == "not_mapped":
+            ida_msg = '%s tid:%s (%s) call_num: 0x%x' % (callname, tid, comm, callnum)
         else:
             ida_msg = '%s %s   tid:%s (%s) cycle:0x%x\n' % (callname, taskUtils.stringFromFrame(frame), tid, comm, self.cpu.cycles)
             self.lgr.debug(ida_msg)
