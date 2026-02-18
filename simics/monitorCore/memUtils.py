@@ -925,17 +925,23 @@ class MemUtils():
                     reg = 'x'+reg[1:]
                     mask = 0xffffffff
                
+                cpl = getCPL(cpu)
                 if reg == 'sp':
-                    reg = 'sp_el0'
+                    if cpl == 0 | arm64_app:
+                        reg = 'sp_el0'
+                    else:
+                        reg = 'sp'
                 #self.lgr.debug('memUtils getRegVal arm64_app %s reg now %s' % (arm64_app, reg))
                 if reg == 'far_el1':
                     reg_num = cpu.iface.int_register.get_number(reg)
-                elif not arm64_app and reg in self.arm_regs:
-                    # simply use name of register
+                elif reg in self.arm_regs or reg in self.arm64_regs:
                     reg_num = cpu.iface.int_register.get_number(reg)
-                elif arm64_app and reg in self.arm64_regs:
-                    # simply use name of register
-                    reg_num = cpu.iface.int_register.get_number(reg)
+                #elif not arm64_app and reg in self.arm_regs:
+                #    # simply use name of register
+                #    reg_num = cpu.iface.int_register.get_number(reg)
+                #elif arm64_app and reg in self.arm64_regs:
+                #    # simply use name of register
+                #    reg_num = cpu.iface.int_register.get_number(reg)
                     
                 elif reg in ['eip']:
                     reg_num = cpu.iface.int_register.get_number('pc')
@@ -1008,7 +1014,7 @@ class MemUtils():
             reg_num = cpu.iface.int_register.get_number('esr_el1')
             reg_value = cpu.iface.int_register.read(reg_num)
             esr_el1_shifted = reg_value >> 26
-            #print('esr_el1_shifted is 0x%x' % esr_el1_shifted)
+            #self.lgr.debug('arm64App esr_el1_shifted is 0x%x' % esr_el1_shifted)
             if esr_el1_shifted == 0x15:
                 # arm64 app
                 #self.lgr.debug('arm64App is arm64 call from 64')
@@ -1569,7 +1575,7 @@ class MemUtils():
     def getKernelSavedCR3(self):
         return self.kernel_saved_cr3
 
-    def wordSize(self, cpu):
+    def wordSize(self, cpu, cpl=None):
         retval = self.WORD_SIZE
         if cpu.architecture.startswith('x86'):
             ''' see api-help x86_exec_mode_t '''
@@ -1578,7 +1584,8 @@ class MemUtils():
                 retval = 4
         elif cpu.architecture == 'arm64':
             # TBD still will break on returns from kernel
-            cpl = getCPL(cpu)
+            if cpl is None:
+                cpl = getCPL(cpu)
             if not self.arm64App(cpu) and cpl != 0:
                 retval = 4
             
