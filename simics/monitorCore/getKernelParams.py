@@ -51,7 +51,7 @@ import w7Params
 import winKParams
 def my_SIM_disassemble_address(cpu, pc, logical, sub_instruct):
         instruct = SIM_disassemble_address(cpu, pc, logical, sub_instruct)
-        if 'cluster' in cpu.name:
+        if False and 'cluster' in cpu.name:
             cmd = 'disassemble address = 0x%x' % pc
             dumb, cli_instruct = cli.quiet_run_command(cmd)
             #print('cli_instruct is type %s' % type(cli_instruct))
@@ -1641,13 +1641,17 @@ class GetKernelParams():
         done = False
         if self.cpu.architecture == 'arm64':
             self.lgr.debug('entryStopHapARM is arm64')
-            if self.only_64:
+            if self.only_64 or (self.want_arm64 and not self.want_arm32):
                 self.lgr.debug('entryStopHapARM is only 64 bit')
                 if self.param.arm64_entry is not None and self.param.arm_ret is not None:
                     done = True
-            else:
+            elif self.want_arm32 and self.want_arm64:
                 self.lgr.debug('entryStopHapARM is mixed 32/64 bit')
                 if self.param.arm_entry is not None and self.param.arm64_entry is not None and self.param.arm_ret is not None:
+                    done = True
+            else:
+                self.lgr.debug('entryStopHapARM is 32 bit only')
+                if self.param.arm_entry is not None and self.param.arm_ret is not None:
                     done = True
         else:
             if self.param.arm_entry is not None and self.param.arm_ret is not None and self.param.arm_ret2 is not None:
