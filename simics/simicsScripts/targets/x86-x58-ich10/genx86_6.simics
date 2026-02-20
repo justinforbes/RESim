@@ -55,6 +55,12 @@ $system.cell->time_quantum = 0.0001
 
 $system->system_info = "Viper - "+$host_name
 
+
+if $create_cdrom == "ide" {
+    local $cdmedia = (new-cdrom-image file = $iso_image)
+    $system.cdrom.cd.insert -dvd media = $cdmedia
+}
+
 #create-text-console-comp $system.serconsole1
 #connect $system.serconsole1.serial $southbridge.serial[0]
 #create-text-console-comp $system.serconsole2
