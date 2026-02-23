@@ -975,7 +975,8 @@ class GenMonitor():
                     self.task_utils[cell_name] = task_utils
                 elif self.isWindows(target=cell_name):
                     os_type = self.comp_dict[cell_name]['OS_TYPE']
-                    self.task_utils[cell_name] = winTaskUtils.WinTaskUtils(cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], self.run_from_snap, os_type, self.lgr) 
+                    self.task_utils[cell_name] = winTaskUtils.WinTaskUtils(self, cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], 
+                         self.run_from_snap, os_type, self.lgr) 
                 elif self.isVxDKM(target=cell_name):
                     self.task_utils[cell_name] = vxKTaskUtils.VxKTaskUtils(cpu, cell_name, self.mem_utils[cell_name], self.comp_dict[cell_name], self.run_from_snap, self.lgr) 
                 else:
@@ -1079,7 +1080,7 @@ class GenMonitor():
                     if True:
                         if self.isWindows(cell_name):
                             os_type = self.comp_dict[cell_name]['OS_TYPE']
-                            task_utils = winTaskUtils.WinTaskUtils(cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], self.run_from_snap, os_type, self.lgr) 
+                            task_utils = winTaskUtils.WinTaskUtils(self, cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], self.run_from_snap, os_type, self.lgr) 
                             swapper = task_utils.getSystemProcRec()
                         else: 
                             unistd32 = None

@@ -66,7 +66,8 @@ class WinTaskUtils():
     ACTIVE_THREADS = 0x328
     THREAD_STATE = 0x164
     PEB_ADDR = 0x338
-    def __init__(self, cpu, cell_name, param, mem_utils, run_from_snap, os_type, lgr, root_prefix=None):
+    def __init__(self, top, cpu, cell_name, param, mem_utils, run_from_snap, os_type, lgr, root_prefix=None):
+        self.top = top
         self.cpu = cpu
         self.cell_name = cell_name
         self.lgr = lgr
@@ -94,7 +95,10 @@ class WinTaskUtils():
         self.call_map = {}
         self.call_num_map = {}
         self.os_type = os_type
-        if self.os_type == 'WIN7':
+        mapfile = self.top.getCompDict(self.cell_name, 'SYSTEM_CALL_MAP')
+        if mapfile is not None:
+            self.lgr.debug('winTaskUtils using call mapfile from %s' % mapfile)
+        elif self.os_type == 'WIN7':
             mapfile = os.path.join(resim_dir, 'windows', 'win7.json')
         elif self.os_type == 'WINXP':
             mapfile = os.path.join(resim_dir, 'windows', 'winxp.json')
