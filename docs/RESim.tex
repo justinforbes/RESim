@@ -1058,17 +1058,19 @@ Alternately you can connect the ethernet devices to the hub, e.g.,:
 ETH0_SWITCH=hub0
 \end{verbatim}
 
-Ethernet devices on the generic x86 platform default to the {\tt i82559} device defined by Simics.  Use of the {\tt \$eth\_dev=} 
+Ethernet devices on the generic x86 platform default to the {\tt i82559} device defined by Simics on Simics 7 and the i82543gc on Simics 6.  Use of the {\tt \$eth\_dev=} 
 entry lets you pick one of the following alternate ethernet devices:
 \begin{verbatim}
 i82559
 i82546bg
 i82543gc
+am79c973
 \end{verbatim}
 
 If using a VLAN, select the 82559.  The i82543gc does not properly support VLANs.
 Note the 82559 device changes ethernet names, e.g., ens11 becomes ens11f0 and ens12 becomes ens12f0.
 Also, Simics 7 has trouble with the i82543gc, but seems to work with the 82559.
+Windows XP seems only to work with the dec21041
 
 Simics CLI variables are assigned to each computer ethernet link using the convention {\tt \$TARGET\_eth0} where {\tt TARGET}
 is the value of the configuration file section header for that component.  Similarly, connections from the computer to the switches 
@@ -4654,6 +4656,14 @@ Adjust edi based on esi value
 [board.mb.cpu0.core[0][0]] cs:0x000000008053d636 p:0x00053d636  call ebx
 
 \end{verbatim}
+
+Windows XP has no drivers for the x86 platfrom motherboard ethernet.  It has drivers
+for the others, but they windows reports error 10, unable to use the device.
+Trial and error showed that the am79c973 controller is recognized, but it hangs during configuration.
+The dec21041 appears to work.
+
+Windows XP changes syscall number mapping frequently.  The ntdll.dll does the mapping.  The 
+RESim/windows/winxpSyscalls.py reads the ntdll.dll and generates a json map of call numbers to calls.
 
 \end{appendices}
 %\printIndex
