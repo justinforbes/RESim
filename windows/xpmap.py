@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import json
-with open('nt-per-syscall.json') as fh:
+with open('win32k-per-syscall.json') as fh:
     call_map = {}
     myos = 'Windows XP'
     j = json.load(fh)
