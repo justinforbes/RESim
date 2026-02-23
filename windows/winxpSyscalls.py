@@ -2,10 +2,7 @@
 import pefile
 import json
 import sys
-'''
-Generate a json map of system call numbers to syscall names from the ntdll.dll for 
-windows XP.
-'''
+
 def get_syscall_map(dll_path):
     """
     Creates a map of syscall numbers to function names by sorting ntdll exports by address.
@@ -33,6 +30,8 @@ if __name__ == "__main__":
     for ssn, name in syscall_map.items():
         print(f"SSN: {ssn:04d}, Function: {name}")
         outmap[ssn] = name
-    with open('/tmp/xp-calls.json', 'w') as fh:
+    outfile = '/tmp/xp-calls.json'
+    with open(outfile, 'w') as fh:
         fh.write(json.dumps(outmap))
+    print('Call map written to %s' % outfile)
 
