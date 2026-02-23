@@ -595,7 +595,7 @@ class WinSyscall():
         #else:
         #    word_size = 4
         #self.lgr.debug('hacky sp is 0x%x ws %d' % (user_sp, word_size))
-
+        do_stop_from_call = False
         #self.lgr.debug('syscallParse syscall name: %s tid:%s callname <%s> params: %s' % (self.name, tid, callname, str(self.call_params)))
         for call_param in self.call_params:
             if call_param.match_param.__class__.__name__ == 'TidFilter':
@@ -618,14 +618,18 @@ class WinSyscall():
                     self.lgr.debug('winSyscall syscallParse operation 0x%x' % operation)
                     if operation in self.ioctl_op_map:
                         alter_callname = self.ioctl_op_map[operation]
+                        if self.stop_on_call:
+                            do_stop_from_call = True
                     else:
                         self.lgr.debug('winSyscall syscallParse operation 0x%x NOT IN op map' % operation)
                 if self.call_list is not None and alter_callname not in self.call_list:
                     self.lgr.debug('syscall syscallParse, runToCall %s not in call list' % alter_callname)
-                    return
+                    if self.name != 'traceAll':
+                        return
                 elif self.call_list is None and call_param.subcall != alter_callname:
                     self.lgr.debug('syscall syscallParse, runToCall %s not the subcall %s and call list is none' % (alter_callname, call_param.subcall))
-                    return
+                    if self.name != 'traceAll':
+                        return
                 else:
                     if self.stop_on_call and not self.linger:
                         self.lgr.debug('syscall syscallParse %s, runToCall call matched, breaking simulation' % callname)
@@ -634,6 +638,8 @@ class WinSyscall():
                     else:
                         syscall.addParam(exit_info, call_param)
                         self.lgr.debug('syscall syscallParse %s, runToCall, call match linger or not stop_on_call, added call_param' % alter_callname)
+                    if self.stop_on_call:
+                        do_stop_from_call = True
 
         frame_string = taskUtils.stringFromFrame(frame)
         #trace_msg = 'tid:%s (%s) %s %s' % (tid, comm, callname, frame_string)
@@ -701,7 +707,7 @@ class WinSyscall():
                 exit_info.count = frame['param5'] & 0xffffffff  #length of return buffer
                 if callname == 'QueryValueKey':
                     if self.os_type == 'WINXP':
-                        exit_info.fname_addr = frame['sp'] + 0x48
+                        exit_info.fname_addr = self.paramOffPtr(2, [4], frame, word_size)
                         exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, 100)
                     else:
                         exit_info.fname_addr = self.paramOffPtr(2, [8], frame, word_size)
@@ -736,8 +742,10 @@ class WinSyscall():
                 elif info_class >= len(winFile.file_information_class):
                     trace_msg = trace_msg + ' given info_class is %d, very confused' % info_class
                     self.lgr.debug('%s frame %s' % (callname, taskUtils.stringFromFrame(frame)))
-                else:
+                elif info_class in winFile.file_information_class:
                     trace_msg = trace_msg + ' information_class: %s return_buf: 0x%x buf_size: 0x%x IoStatusBlock_addr: 0x%x' % (winFile.file_information_class[info_class], exit_info.retval_addr, buf_size, io_status_block)
+                else:
+                    trace_msg = trace_msg + ' BROKEN'
 
             elif callname == 'SetInformationFile':
                 info_class = frame['param5'] & 0xFF # all values are under 80
@@ -791,7 +799,10 @@ class WinSyscall():
         elif callname == 'ReadFile':
             exit_info.old_fd = frame['param1']
             # data buffer address
-            exit_info.retval_addr = frame['param7']
+            if self.os_type == 'WINXP':
+                exit_info.retval_addr = frame['param6']
+            else:
+                exit_info.retval_addr = frame['param7']
             # the return count address --> this is where kernel will store count ACTUALLY sent/received
             #if word_size == 4:
             #    exit_info.fname_addr = self.paramOffPtr(5, [0], frame, word_size) + word_size
@@ -802,7 +813,10 @@ class WinSyscall():
             else:
                 exit_info.count_addr = frame['param5'] 
             exit_info.delay_count_addr = exit_info.count_addr
-            exit_info.count = frame['param8'] & 0xFFFFFFFF 
+            if self.os_type == 'WINXP':
+                exit_info.count = frame['param7'] & 0xFFFFFFFF 
+            else:
+                exit_info.count = frame['param8'] & 0xFFFFFFFF 
              
             trace_msg = trace_msg+' Handle: 0x%x buf_addr: 0x%x RetCount_addr: 0x%x requested_count: %d' % (exit_info.old_fd, exit_info.retval_addr, exit_info.delay_count_addr, exit_info.count) 
             self.lgr.debug('ReadFile %s' % trace_msg)
@@ -895,9 +909,16 @@ class WinSyscall():
             else:
                 #SIM_break_simulation('create')
 
-                str_size_addr = self.paramOffPtr(3, [0x10], frame, word_size) 
-                str_size = self.mem_utils.readWord16(self.cpu, str_size_addr)
-                exit_info.fname_addr = self.paramOffPtr(3, [0x10, 8], frame, word_size)
+                if self.os_type == 'WINXP':
+                    str_size = self.paramOffPtr(3, [0xc], frame, word_size) 
+                    self.lgr.debug('winSyscall %s str_size 0x%x' % (callname, str_size))
+                    exit_info.fname_addr = self.paramOffPtr(3, [0x8, 4], frame, word_size)
+                    self.lgr.debug('winSyscall %s fname_addr 0x%x' % (callname, exit_info.fname_addr))
+                    
+                else:
+                    str_size_addr = self.paramOffPtr(3, [0x10], frame, word_size) 
+                    str_size = self.mem_utils.readWord16(self.cpu, str_size_addr)
+                    exit_info.fname_addr = self.paramOffPtr(3, [0x10, 8], frame, word_size)
                 
                 if exit_info.fname_addr is None:
                     trace_msg = trace_msg+' fname address is None' 
@@ -918,7 +939,7 @@ class WinSyscall():
                             accesses.append(name)
     
                     attributes = []
-                    file_attributes = frame['parm7'] & 0xffffffff
+                    file_attributes = frame['param7'] & 0xffffffff
                     if file_attributes == 0x0:
                        attributes.append('NONE')
 
@@ -995,13 +1016,20 @@ class WinSyscall():
 
         elif callname in ['OpenFile', 'OpenKeyEx', 'OpenKey', 'OpenSection']:
             object_attr = frame['param3']
-            str_size_addr = self.paramOffPtr(3, [0x10], frame, word_size) 
-            str_size = self.mem_utils.readWord16(self.cpu, str_size_addr)
+            if self.os_type == 'WINXP':
+                str_size = self.paramOffPtr(3, [0xc], frame, word_size) 
+                self.lgr.debug('winSyscall %s str_size 0x%x' % (callname, str_size))
+            else:
+                str_size_addr = self.paramOffPtr(3, [0x10], frame, word_size) 
+                str_size = self.mem_utils.readWord16(self.cpu, str_size_addr)
               
             if str_size is not None:
-                self.lgr.debug('winSyscall %s str_size_addr: 0x%x size: %d' % (callname, str_size_addr, str_size))
-
-                exit_info.fname_addr = self.paramOffPtr(3, [0x10, 8], frame, word_size)
+                self.lgr.debug('winSyscall %s size: %d' % (callname, str_size))
+                if self.os_type == 'WINXP':
+                    exit_info.fname_addr = self.paramOffPtr(3, [0x8, 4], frame, word_size)
+                    self.lgr.debug('winSyscall %s fname_addr 0x%x' % (callname, exit_info.fname_addr))
+                else:
+                    exit_info.fname_addr = self.paramOffPtr(3, [0x10, 8], frame, word_size)
                 exit_info.retval_addr = frame['param1']
                 max_count = min(1000, str_size)
                 exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, max_count)
@@ -1079,8 +1107,11 @@ class WinSyscall():
             else:
                 trace_msg = trace_msg+' Handle: 0x%x count is None' % (exit_info.old_fd)
 
-        elif callname == 'ConnectPort':
-            exit_info.fname_addr = self.paramOffPtr(2, [8], frame, word_size)
+        elif callname in ['ConnectPort', 'SecureConnectPort']:
+            if self.os_type == 'WINXP':
+                exit_info.fname_addr = self.paramOffPtr(2, [4], frame, word_size)
+            else:
+                exit_info.fname_addr = self.paramOffPtr(2, [8], frame, word_size)
             str_size_addr = frame['param2']
             str_size = self.mem_utils.readWord16(self.cpu, str_size_addr)
             max_count = min(1000, str_size)
@@ -1210,12 +1241,12 @@ class WinSyscall():
         #    entry = self.task_utils.getSyscallEntry(callnum)
         #    SIM_break_simulation('query information process computed 0x%x' % entry)
         elif callname in ['FindAtom', 'AddAtom']:
-            str_addr = frame['param1']
-            length = frame['param2']
-            max_count = min(1000, length)
-            atom_str = self.mem_utils.readWinString(self.cpu, str_addr, max_count)
-            exit_info.retval_addr = frame['param3']
-            trace_msg = trace_msg + ' atom string: %s, length: %d' % (atom_str, length)
+                str_addr = frame['param1']
+                length = frame['param2']
+                max_count = min(1000, length)
+                atom_str = self.mem_utils.readWinString(self.cpu, str_addr, max_count)
+                exit_info.retval_addr = frame['param3']
+                trace_msg = trace_msg + ' atom string: %s, length: %d' % (atom_str, length)
            
         elif callname == 'DeleteFile':
             str_addr = frame['param1']
@@ -1233,6 +1264,9 @@ class WinSyscall():
             object_name = self.mem_utils.readWinString(self.cpu, object_name_addr, 100)
             self.lgr.debug('winSyscall object_name %s' % object_name)
             trace_msg = trace_msg + ' handle_addr: 0x%x access_mask: 0x%x name_addr: 0x%x name: %s'  % (handle, access_mask, object_name_addr, object_name)
+        elif callname == 'QueryBootEntryOrder':
+            #SIM_break_simulation(callname)
+            trace_msg = trace_msg + 'Now what?'
         else:
             #self.lgr.debug(trace_msg)
             pass
@@ -1263,6 +1297,11 @@ class WinSyscall():
                 self.win_delays[tid][exit_info.old_fd].remove()
                 self.win_delays[tid][exit_info.old_fd] = exit_info.asynch_handler
                 
+        if do_stop_from_call:
+            self.lgr.debug('syscall syscallParse do_stop_from_call')
+            self.top.rmSyscall('runToCall')
+            self.context_manager.setIdaMessage(trace_msg)
+            SIM_run_alone(self.stopAlone, 'run to call %s' % callname)
 
 
         return exit_info
@@ -1503,7 +1542,7 @@ class WinSyscall():
             exit_info.retval_addr = frames[tid]['param2']
             exit_info.count = frames[tid]['param3']
             exit_info.old_fd = frames[tid]['param1']
-            self.lgr.debug('setExits set count to parm3 now 0x%x' % exit_info.count)
+            self.lgr.debug('setExits set count to param3 now 0x%x' % exit_info.count)
 
             the_callname = callname
             ''' TBD need to evaluate syscall params against call params to know if we care about this call'''

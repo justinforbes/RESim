@@ -154,6 +154,7 @@ class Win7CallParams():
     def doBreaks(self):
         ''' set breaks on syscall entries and exits '''
         if self.one_entry is not None:
+            # single computed syscall
             self.entry_break = SIM_breakpoint(self.default_context, Sim_Break_Linear, Sim_Access_Execute, self.one_entry, 1, 0)
             self.entry_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.oneCallHap, None, self.entry_break)
             self.lgr.debug('win7CallParams doBreaks on one_entry 0x%x' % self.one_entry)
@@ -162,17 +163,18 @@ class Win7CallParams():
             #self.entry_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.syscallHap, None, self.entry_break)
             self.entry_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.sysenter, 1, 0)
             self.entry_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, None, self.entry_break, 'win7CallParams_enter')
-            if self.track_params:
-                #self.exit_break = SIM_breakpoint(self.default_context, Sim_Break_Linear, Sim_Access_Execute, self.param.sysret64, 1, 0)
-                #self.exit_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.exitHap, None, self.exit_break)
-                if self.os_type == 'WINXP':
-                    self.exit_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.sysexit, 1, 0)
-                else:
-                    self.exit_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.sysret64, 1, 0)
-                self.exit_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, None, self.exit_break, 'win7CallParams_exit')
-                self.lgr.debug('win7CallParams tracking params, exit set along with sysenter haps')
-            else:
-                self.lgr.debug('win7CallParams not tracking params')
+            self.lgr.debug('win7CallParams doBreaks set entry break on 0x%x' % self.entry_break)
+            #if self.track_params:
+            #    #self.exit_break = SIM_breakpoint(self.default_context, Sim_Break_Linear, Sim_Access_Execute, self.param.sysret64, 1, 0)
+            #    #self.exit_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.exitHap, None, self.exit_break)
+            #    if self.os_type == 'WINXP':
+            #        self.exit_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.sysexit, 1, 0)
+            #    else:
+            #        self.exit_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.sysret64, 1, 0)
+            #    self.exit_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, None, self.exit_break, 'win7CallParams_exit')
+            #    self.lgr.debug('win7CallParams tracking params, exit set along with sysenter haps')
+            #else:
+            #    self.lgr.debug('win7CallParams not tracking params')
 
     def doParamTrack(self, rcx, rdx, r8, r9, rsp, call_name, ignore_sp): 
         ''' Track kernel references to user space, recording which of the given parameter pointers the reference is relative to '''
@@ -219,6 +221,30 @@ class Win7CallParams():
         self.param_ref_tracker = paramRefTracker.ParamRefTracker(rsp, rcx, rdx, r8, r9, self.mem_utils, self.task_utils, self.cpu, call_name, ignore_sp, self.lgr)
         #SIM_break_simulation('oneCallHap')
 
+    def doParamTrackAllXP(self, call_name):
+        ''' 
+        '''
+        self.lgr.debug('win7CallParams doParamTrackAllXP')
+        tid = self.task_utils.curTID()
+        if self.exit_hap is not None:
+            self.context_manager.genDeleteHap(self.exit_hap, immediate=True)
+        self.exit_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.sysexit, 1, 0)
+        self.exit_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitTrackHap, tid, self.exit_break, 'win7CallParams_track_exit')
+
+        #self.user_break = SIM_breakpoint(self.resim_context, Sim_Break_Linear, Sim_Access_Read, 0, (self.param.kernel_base-1),  0)
+        #self.user_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.userReadHap, tid, self.user_break)
+        self.user_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Read, 0, (self.param.kernel_base-1), 0)
+        self.user_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.userReadHap, tid, self.user_break, 'win7CallParams_track_read')
+
+        #self.user_write_break = SIM_breakpoint(self.resim_context, Sim_Break_Linear, Sim_Access_Write, 0, (self.param.kernel_base-1),  0)
+        #self.user_write_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.userWriteHap, tid, self.user_write_break)
+        self.user_write_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, 0, (self.param.kernel_base-1), 0)
+        self.user_write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.userWriteHap, tid, self.user_write_break, 'win7CallParams_track_write')
+        self.lgr.debug('win7CallParams doParamTrackAllXP exit and user breaks set, get a param tracker for tid %s' % tid)
+        esp = self.mem_utils.getRegValue(self.cpu, 'edx')
+        self.param_ref_tracker = paramRefTrackerXP.ParamRefTrackerXP(esp, self.mem_utils, self.task_utils, self.cpu, call_name, self.lgr)
+        #SIM_break_simulation('oneCallHap')
+
     def doParamTrackXP(self, call_name):
         self.lgr.debug('win7CallParams doParamTrackXP cycles: 0x%x' % self.cpu.cycles)
         if self.do_context_switch:
@@ -232,8 +258,7 @@ class Win7CallParams():
 
         self.user_write_break = SIM_breakpoint(self.resim_context, Sim_Break_Linear, Sim_Access_Write, 0, (self.param.kernel_base-1),  0)
         self.user_write_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.userWriteHap, tid, self.user_write_break)
-        self.lgr.debug('win7CallParams doParamTrackXP exit and user breaks set, get a param tracker')
-        #SIM_break_simulation('oneCallHap')
+        self.lgr.debug('win7CallParams doParamTrackXP exit (0x%x) and user breaks set, get a param tracker' % self.param.sysexit)
         esp = self.mem_utils.getRegValue(self.cpu, 'edx')
         self.param_ref_tracker = paramRefTrackerXP.ParamRefTrackerXP(esp, self.mem_utils, self.task_utils, self.cpu, call_name, self.lgr)
 
@@ -358,7 +383,7 @@ class Win7CallParams():
             else:
                 self.doParamTrackAll(rcx, rdx, r8, r9, rsp, call_name, ignore_sp)
         else:
-            self.doParamTrackXP(call_name)
+            self.doParamTrackAllXP(call_name)
     
 
     def syscallHap(self, dumb, third, forth, memory):
@@ -379,31 +404,16 @@ class Win7CallParams():
             self.lgr.debug('win7CallParams syscallHap tid:%s (%s) call %d name %s' % (tid, comm, rax, call_name))
             if self.only_call_num is not None and call_name != self.only:
                 self.lgr.debug('win7CallParams call call_name %s looking for %s' % (call_name, self.only))
-                return
+            elif call_name == 'Continue':
+                pass
 
-            if call_name == 'Continue':
-                return
-
-            if call_name is not None:
+            elif call_name is not None:
 
                 if call_name == 'RaiseException':
                     ''' This will just bounce to a user space exception handler.
                         Do not track or confusion will reign. '''
                     self.lgr.debug('win7CallParams syscallHap got RaiseException, just return')
                     return
-
-                #computed = self.task_utils.getSyscallEntry(rax)
-                #if computed is not None:
-                #    self.lgr.debug('win7CallParams syscallHap tid:%s (%s) call %s computed is 0x%x' % (tid, comm, call_name, computed))
-                #else:
-                #    self.lgr.error('win7CallParams syscallHap tid:%s could not compute syscall entry for call %d' % (tid, rax))
-
-                #if call_name == 'OpenFile':
-                #    SIM_break_simulation('open file') 
-                #if not self.got_one and call_name != 'OpenFile':
-                #    #self.lgr.debug('syscallHap looking for Open got %s' % call_name)
-                #    return
-                #self.got_one = True
                 self.current_call[tid] = rax
                 rsp = self.mem_utils.getRegValue(self.cpu, 'rsp')
                 self.entry_rsp[tid] = rsp
@@ -570,7 +580,7 @@ class Win7CallParams():
 
             if tid in self.current_call:
                 call_name = self.task_utils.syscallName(self.current_call[tid])
-                #self.lgr.debug('exitHap callname %s' % call_name)
+                #self.lgr.debug('exitHap call_name %s' % call_name)
             if self.stop_on is not None:
                 #self.lgr.debug('exitHap stopon is %s and tid' % self.stop_on)
                 if call_name is not None:

@@ -236,8 +236,9 @@ class WinCallExit():
             fd = exit_info.old_fd
             if fd is not None:
                 if self.os_type == 'WINXP':
-                    section_handle_addr = exit_info.frame['param6']
+                    section_handle_addr = exit_info.frame['param1']
                     section_handle = self.mem_utils.readWord(self.cpu, section_handle_addr)
+                    pass
                 else:
                     section_handle = exit_info.syscall_instance.paramOffPtr(1, [0], exit_info.frame, word_size) 
                 self.soMap.createSection(fd, section_handle, tid)
@@ -268,7 +269,7 @@ class WinCallExit():
             else:
                 self.lgr.debug('%s handle is none' % trace_msg)
 
-        elif callname in ['ConnectPort', 'AlpcConnectPort']:
+        elif callname in ['ConnectPort', 'AlpcConnectPort', 'SecureConnectPort']:
             fd = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
             if fd is None:
                  SIM_break_simulation('bad fd read from 0x%x' % exit_info.retval_addr)

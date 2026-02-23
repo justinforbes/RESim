@@ -35,7 +35,15 @@ class ParamRefTrackerXP():
             self.lgr = lgr
             self.esp = esp
             self.base_params = {}
-            self.base_params['rsp1'] = esp
+            self.base_values = {}
+            ptr = esp + 8
+            for i in range(1,12):
+                basename = 'param%d' % i
+                self.base_params[basename] = ptr
+                value = self.mem_utils.readWord32(self.cpu, ptr)
+                self.base_values[basename] = value
+                ptr = ptr + 4
+            #self.base_params['rsp1'] = esp
             if self.call_name == 'DeviceIoControlFile':
                 self.lgr.debug('Is %s, TBD???' % self.call_name)
                 ioctl_op_map = winSocket.getOpMap()
@@ -53,6 +61,10 @@ class ParamRefTrackerXP():
 
         def toString(self):
             retval = 'call: %s sp: 0x%x cycles: 0x%x\n' % (self.call_name, self.esp, self.start_cycle)
+            ptr = self.esp + 8
+            for p in self.base_params:
+                retval = '%s %s 0x%x 0x%x\n' % (retval, p, self.base_params[p], self.base_valuse[p])
+                ptr = ptr + 4
             index = 1
             for reference in self.refs:
                 retval = '%s \t%d %s\n' % (retval, index, reference.toString())
@@ -66,7 +78,7 @@ class ParamRefTrackerXP():
             
 
         class ParamRef():
-            def __init__(self, addr, operator, value, hexstring, other_ptr, size, best_base, best_base_delta, ref_of_base, lgr=None):
+            def __init__(self, addr, operator, value, hexstring, other_ptr, size, best_base, best_base_delta, ref_of_base, lgr=None, param_name=None):
                 self.addr = addr
                 self.operator = operator
                 self.hexstring = hexstring
@@ -76,6 +88,7 @@ class ParamRefTrackerXP():
                 self.best_base = best_base
                 self.best_base_delta = best_base_delta
                 self.ref_of_base = ref_of_base
+                self.param_name = param_name 
                 self.lgr = lgr
 
             def hackEncode(self, the_bytes):
@@ -104,7 +117,9 @@ class ParamRefTrackerXP():
                 else:
                        hexs = self.hexstring
                 
-                if type(self.best_base) is str:
+                if self.param_name is not None:
+                    retval = 'param %s addr: 0x%x %s: %s size: %d' % (self.param_name, self.addr, self.operator, hexs, self.size)
+                elif type(self.best_base) is str:
                     retval = 'addr: 0x%x %s: %s size: %d best_base: %s  best_base_delta: 0x%x' % (self.addr, self.operator, hexs, self.size, self.best_base, self.best_base_delta)
                 else:
                     retval = 'addr: 0x%x %s: %s size: %d best_base: 0x%x  best_base_delta: 0x%x' % (self.addr, self.operator, hexs, self.size, self.best_base, self.best_base_delta)
@@ -113,7 +128,7 @@ class ParamRefTrackerXP():
 
         class OtherRef():
             ''' Represents a pointer found relative to some other base, which could be a register or another OtherRef '''
-            def __init__(self, ptr, base, offset, ref_of_base, lgr):
+            def __init__(self, ptr, base, offset, ref_of_base, lgr, param_name=None):
                 ''' the pointer value that was read relative to some other base '''
                 self.ptr = ptr
                 ''' names the other base '''
@@ -122,6 +137,7 @@ class ParamRefTrackerXP():
                 self.offset = offset
                 ''' The reference (OtherRef) associated with that base '''
                 self.ref_of_base = ref_of_base
+                self.param_name = param_name
                 self.lgr = lgr
 
             def toString(self, start_string=''):
@@ -129,7 +145,11 @@ class ParamRefTrackerXP():
                 done = False
                 cur_ref = self
                 while not done:  
-                    if type(cur_ref.base) is str:
+                    if cur_ref.param_name is not None:
+                        entry = 'Param %s ptr 0x%x' % (cur_ref.param_name, cur_ref.ptr)
+                        done = True
+                        retval = retval + ' '+entry
+                    elif type(cur_ref.base) is str:
                         entry = 'ptr 0x%x base %s offset 0x%x' % (cur_ref.ptr, cur_ref.base, cur_ref.offset)
                         done = True
                         retval = retval + ' '+entry
@@ -145,14 +165,14 @@ class ParamRefTrackerXP():
             best_base_of_base_delta = None
             best_base = None
             self.lgr.debug('\tgetBestBase for 0x%x' % addr)
-            for base in self.base_params:
-                self.lgr.debug('\t\tgetBestBase compare 0x%x to base_param[%s] 0x%x' % (addr, base, self.base_params[base]))
-                if addr >= self.base_params[base]:
-                    delta = addr - self.base_params[base]
-                    self.lgr.debug('\t\tgetBestBase delta 0x%x, best_base_delta %s' % (delta, str(best_base_delta)))
-                    if best_base_delta is None or delta < best_base_delta:
-                        best_base_delta = delta
-                        best_base = base
+            #for base in self.base_params:
+            #    self.lgr.debug('\t\tgetBestBase compare 0x%x to base_param[%s] 0x%x' % (addr, base, self.base_params[base]))
+            #    if addr >= self.base_params[base]:
+            #        delta = addr - self.base_params[base]
+            #        self.lgr.debug('\t\tgetBestBase delta 0x%x, best_base_delta %s' % (delta, str(best_base_delta)))
+            #        if best_base_delta is None or delta < best_base_delta:
+            #            best_base_delta = delta
+            #            best_base = base
 
             for other in self.other_addrs:
                 if addr >= other:
@@ -172,23 +192,35 @@ class ParamRefTrackerXP():
             else:
                 self.lgr.debug('\tgetBestBase got %s delta 0x%x' % (best_base, best_base_delta))
             return best_base, best_base_delta
+
+        def isParamAddr(self, addr):
+            for p in self.base_params:
+                if self.base_params[p] == addr:
+                    return p
+            return None
  
         def addRef(self, addr, value, hexstring, size, other_ptr):
             ''' Record a reference to user space during a system call '''
             retval = True
-            best_base, best_base_delta = self.getBestBase(addr)
-            ''' maybe done doing real work?? '''
-            #if best_base_delta > 0x1000000:
-            #    retval = False
-            ref_of_base = None
-            if type(best_base) is int:
-                self.lgr.debug('\taddRef best_base is int')
-                ref_of_base = self.other_addrs[best_base]
-            if other_ptr is not None:
-                other_ref = self.OtherRef(other_ptr, best_base, best_base_delta, ref_of_base, self.lgr)
-                self.lgr.debug('\taddRef append 0x%x to other_ptr ref to string %s' % (other_ptr, other_ref.toString()))
-                self.other_addrs[other_ptr] = other_ref
-            new_ref = self.ParamRef(addr, 'read', value, hexstring, other_ptr, size, best_base, best_base_delta, ref_of_base)
+            
+            param_name = self.isParamAddr(addr)
+            if param_name is not None:
+                if other_ptr is not None:
+                    other_ref = self.OtherRef(other_ptr, None, None, None, self.lgr, param_name=param_name)
+                    self.lgr.debug('\taddRef append 0x%x to other_ptr ref to string %s' % (other_ptr, other_ref.toString()))
+                    self.other_addrs[other_ptr] = other_ref
+                new_ref = self.ParamRef(addr, 'read', value, hexstring, other_ptr, size, None, None, None, param_name=param_name)
+            else:
+                best_base, best_base_delta = self.getBestBase(addr)
+                ref_of_base = None
+                if type(best_base) is int:
+                    self.lgr.debug('\taddRef best_base is int')
+                    ref_of_base = self.other_addrs[best_base]
+                if other_ptr is not None:
+                    other_ref = self.OtherRef(other_ptr, best_base, best_base_delta, ref_of_base, self.lgr)
+                    self.lgr.debug('\taddRef append 0x%x to other_ptr ref to string %s' % (other_ptr, other_ref.toString()))
+                    self.other_addrs[other_ptr] = other_ref
+                new_ref = self.ParamRef(addr, 'read', value, hexstring, other_ptr, size, best_base, best_base_delta, ref_of_base)
             self.refs.append(new_ref)
 
             if self.prev_read_addr is not None and (addr == (self.prev_read_addr-self.mem_utils.WORD_SIZE)):
