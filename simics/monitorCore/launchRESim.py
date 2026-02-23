@@ -506,10 +506,18 @@ class LaunchRESim():
                             if self.SIMICS_VER.startswith('4'):
                                run_command('$'+cmd)
                         else:
-                            cmd = '%s=%s' % (name, value)
-                            run_command(cmd)
+                            if 'create_network' in name:
+                                did_net_create = True
+                                cmd = '$create_network=TRUE'
+                                run_command(cmd)
+                                cmd = '$eth_link=%s' % value
+                                run_command(cmd)
+                            else:
+                                cmd = '%s=%s' % (name, value)
+                                run_command(cmd)
                             #print('cmd is %s' % cmd)
-                if 'x86' in script and not did_net_create:
+                #if 'x86' in script and not did_net_create:
+                if not did_net_create:
                     params = params+" "+'create_network=FALSE'
 
             if did_net_create:
