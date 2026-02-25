@@ -416,6 +416,7 @@ class SOMap():
                     #self.checkSOWatch(load_addr, prog)
                     self.pending_execve[prog] = load_addr
                     mem_utils = self.task_utils.getMemUtils()
+                    self.lgr.debug('soMap do execve handling in user mode via doInUser')
                     doInUser.DoInUser(self.top, self.cpu, self.pendingExecve, prog, self.task_utils, mem_utils, self.context_manager, self.lgr, tid=tid)
                     size = self.prog_info[prog].text_size + self.prog_info[prog].text_offset
                     retval = LoadInfo(load_addr, size, interp=interp)
@@ -964,10 +965,10 @@ class SOMap():
     def wordSize(self, tid=None):
        # TBD why take tid as param?  Because may be multiple processes/objects of different sizes
        # should pass in address, or leave as None to indicate current scheduled thread
-       return self.task_utils.getMemUtils().wordSize(self.cpu)
+       return self.task_utils.getMemUtils().wordSize(self.cpu, cpl=1)
 
     def getMachineSize(self, tid):
-       ws = self.task_utils.getMemUtils().wordSize(self.cpu)
+       ws = self.task_utils.getMemUtils().wordSize(self.cpu, cpl=1)
        if ws == 4:
            return 32
        else:
