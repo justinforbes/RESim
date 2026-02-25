@@ -871,7 +871,7 @@ class MemUtils():
             return None
 
     def readAppPtr(self, cpu, vaddr, size=None):
-        # careful, this breaks on 32-bit windows apps without explicit word size
+        # careful, this breaks on 32-bit windows apps (and arm64 32-bit apps) without explicit word size
         if size is None: 
             size = self.wordSize(cpu)
         #if vaddr < self.param.kernel_base:
