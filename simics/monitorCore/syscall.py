@@ -767,8 +767,11 @@ class Syscall():
             callnum = self.task_utils.syscallNumber(call, compat32, arm64_app=arm64_app)
             #self.lgr.debug('SysCall setComputeBreaks call: %s  num: %d arm64_app %s' % (call, callnum, str(arm64_app)))
             if callnum is not None and callnum < 0:
-                self.lgr.error('Syscall setComputeBreaks bad call number %d for call <%s>' % (callnum, call))
-                return None, None
+                if call == 'mmap':
+                    callnum = self.task_utils.syscallNumber('mmap2', compat32, arm64_app=arm64_app)
+                if callnum is not None and callnum < 0:
+                    self.lgr.error('Syscall setComputeBreaks bad call number %d for call <%s>' % (callnum, call))
+                    return None, None
             entry = self.task_utils.getSyscallEntry(callnum, compat32, arm64_app=arm64_app)
             #phys = self.mem_utils.v2p(cpu, entry)
             #proc_break = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys, 1, 0)
@@ -2365,6 +2368,16 @@ class Syscall():
             self.lgr.debug(ida_msg)
             #SIM_break_simulation(ida_msg)
 
+        elif callname == 'statx':
+            exit_info.old_fd = frame['param1']
+            fname_addr = frame['param2']
+            exit_info.fname = self.mem_utils.readString(self.cpu, fname_addr, 256)
+            exit_info.flags = frame['param3'] 
+            mask = frame['param4'] 
+            exit_info.retval_addr = frame['param5']
+            ida_msg = '%s tid:%s (%s) dir FD: %d path_addr: 0x%x path: %s return buffer: 0x%x' % (callname, tid, comm, 
+                   exit_info.old_fd, fname_addr, exit_info.fname, exit_info.retval_addr)
+
         elif callname.startswith('stat'):
             fname_addr = frame['param1']
             retval_addr = frame['param2']
@@ -2643,6 +2656,7 @@ class Syscall():
                 self.top.skipAndMail()
 
     def getExitAddrs(self, break_eip, syscall_info, frame = None):
+        ''' Get the system call exit addresses and the call parameter frame'''
         exit_eip1 = None
         exit_eip2 = None
         exit_eip3 = None
@@ -2798,6 +2812,7 @@ class Syscall():
         if self.context_manager.isIgnoreContext():
             return
         cpu, comm, tid = self.task_utils.curThread() 
+        self.lgr.debug('syscallhap for %s' % (tid))
         if self.cpu.architecture == 'arm64' and self.arm64BailCheck(break_num):
             return
  
@@ -2933,6 +2948,7 @@ class Syscall():
             return
         
         if self.sharedSyscall.isPendingExecve(tid):
+            self.lgr.debug('syscallHap isPendingExecve call %s tid:%s' % (callname, tid))
             if callname == 'close':
                 self.lgr.debug('syscallHap must be a close on exec? tid:%s' % tid)
                 return
@@ -3071,11 +3087,12 @@ class Syscall():
             if exit_info is not None:
                 if comm != 'tar':
                     name = callname+'-exit' 
-                    #self.lgr.debug('syscallHap call to addExitHap for tid:%s' % tid)
+                    self.lgr.debug('syscallHap call to addExitHap for tid:%s' % tid)
                     if self.stop_on_call:
                         cp = CallParams('stop_on_call', None, None, break_simulation=True)
                         exit_info.call_params.append(cp)
                     self.sharedSyscall.addExitHap(self.cell, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, name)
+                    self.lgr.debug('syscallHap back from call to addExitHap for tid:%s' % tid)
                 else:
                     self.lgr.debug('syscallHap tid:%s skip exitHap for tar' % tid)
 
