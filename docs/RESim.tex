@@ -1095,7 +1095,7 @@ reach external networks (e.g., to install packages), consider using {\tt service
 
 \subsubsection{DHCP}
 \label{DHCP}
-If you have an x86 target that requires DHCP to get an IP address, use the {\tt create\_network} environment variable, providing a value
+If you have an ARM or x86 target that requires DHCP to get an IP address, use the {\tt create\_network} environment variable, providing a value
 naming one of the switches to which a service node will be created.  The first IP address by default to the device will be 10.10.0.100.
 That service node will have NAPT disabled.  Note you must set the switch value to NONE for the named switch.  An alternative is to add
 a DHCP server to the driver.
