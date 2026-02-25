@@ -1549,8 +1549,8 @@ class Syscall():
                     # TBD apply this whereever we enter that might modify buffers
                     self.top.stopDataWatch(leave_backstop=True)
         elif socket_callname == "recvmsg": 
-            #frame_string = taskUtils.stringFromFrame(frame)
-            #self.lgr.debug('recvmsg frame %s' % frame_string)
+            frame_string = taskUtils.stringFromFrame(frame)
+            self.lgr.debug('recvmsg frame %s' % frame_string)
             exit_info.old_fd = frame['param1']
             msg_hdr_ptr = frame['param2']
             exit_info.retval_addr = frame['param2']
@@ -2369,14 +2369,14 @@ class Syscall():
             #SIM_break_simulation(ida_msg)
 
         elif callname == 'statx':
-            exit_info.old_fd = frame['param1']
+            fd = resimSimicsUtils.fdString(frame['param1'])
             fname_addr = frame['param2']
             exit_info.fname = self.mem_utils.readString(self.cpu, fname_addr, 256)
             exit_info.flags = frame['param3'] 
             mask = frame['param4'] 
             exit_info.retval_addr = frame['param5']
-            ida_msg = '%s tid:%s (%s) dir FD: %d path_addr: 0x%x path: %s return buffer: 0x%x' % (callname, tid, comm, 
-                   exit_info.old_fd, fname_addr, exit_info.fname, exit_info.retval_addr)
+            ida_msg = '%s tid:%s (%s) dir FD: %s path_addr: 0x%x path: %s return buffer: 0x%x' % (callname, tid, comm, 
+                   fd, fname_addr, exit_info.fname, exit_info.retval_addr)
 
         elif callname.startswith('stat'):
             fname_addr = frame['param1']
