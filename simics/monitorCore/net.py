@@ -315,7 +315,7 @@ class Msghdr():
         else:
             msg_name = ''
             if self.msg_namelen > 0:
-                if self.msg_namelen > 100:
+                if self.msg_namelen > 200:
                     self.lgr.error('net Msghdr getString msg_namelen seems large %d' % self.msg_namelen)
                     retval = 'msg_name BROKEN addr 0x%x  msg_namelen: %d  msg_name: %s msg_iov: 0x%x  msg_iovlen: %d  msg_control: 0x%x msg_controllen %d flags 0x%x' % (self.msg_name,
                     self.msg_namelen, msg_name, self.msg_iov, self.msg_iovlen, self.msg_control, self.msg_controllen, self.flags)
