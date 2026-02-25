@@ -89,7 +89,7 @@ class RecordEntry():
                     self.lgr.debug('recordEntry watchSysenter set linear break at 0x%x' % (self.param.arm_entry))
                     enter_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
                     self.sysenter_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sysenterHap, None, enter_break1, 'recordEntry sysenter')
-                if self.cpu.architecture == 'arm64' and hasattr(self.param, 'arm64_entry'):
+                if self.cpu.architecture == 'arm64' and hasattr(self.param, 'arm64_entry') and self.param.arm64_entry is not None:
                     self.lgr.debug('recordEntry watchSysenter set arm64 linear break at 0x%x' % (self.param.arm64_entry))
                     enter_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.arm64_entry, 1, 0)
                     self.sysenter64_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sysenterHap, None, enter_break1, 'recordEntry sysenter')
@@ -132,8 +132,8 @@ class RecordEntry():
                         #self.lgr.debug(taskUtils.stringFromFrame(frame))
                         #SIM_break_simulation('debug me')
                         callname = self.task_utils.syscallName(call_num, self.compat32)
-                        if callname is None:
-                            self.lgr.debug('recordEntry sysenterHap bad call num %d, ignore' % call_num)
+                        if callname is None or callname == 'not_mapped':
+                            self.lgr.debug('recordEntry sysenterHap bad call num %d, assume page fault, ignore' % call_num)
                             return
                         #self.lgr.debug('recordEntry sysenterHap tid:%s frame %s callnum %d callname %s cycles: 0x%x' % (tid, taskUtils.stringFromFrame(frame), call_num, callname, self.cpu.cycles))
                     else:
