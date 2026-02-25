@@ -547,7 +547,7 @@ class GenMonitor():
                 self.quit()
                 return
             if self.os_type[cell_name].startswith('LINUX'):
-                if 'RESIM_UNISTD' not in comp_dict[cell_name]:
+                if 'RESIM_UNISTD' not in comp_dict[cell_name] and 'RESIM_UNISTD_32' not in comp_dict[cell_name]:
                     if cell_name == 'driver':
                         print('Driver missing RESIM_UNISTD, will not be analyzed')
                         continue
@@ -555,7 +555,8 @@ class GenMonitor():
                     self.lgr.error('Target is missing RESIM_UNISTD path')
                     self.quit()
                     return
-                self.unistd[cell_name] = comp_dict[cell_name]['RESIM_UNISTD']
+                if 'RESIM_UNISTD' in comp_dict[cell_name]:
+                    self.unistd[cell_name] = comp_dict[cell_name]['RESIM_UNISTD']
                 self.lgr.debug('RESIM_UNISTD for cell %s' % cell_name)
                 if 'RESIM_UNISTD_32' in comp_dict[cell_name]:
                     self.unistd32[cell_name] = comp_dict[cell_name]['RESIM_UNISTD_32']
@@ -962,16 +963,19 @@ class GenMonitor():
                 cpu = self.cell_config.cpuFromCell(cell_name)
                 self.snap_start_cycle[cpu] = cpu.cycles
                 if self.os_type[cell_name].startswith('LINUX'):
-                    if cell_name not in self.unistd:
+                    if cell_name not in self.unistd and cell_name not in self.unistd32:
                         self.lgr.error('Component %s missing unistd path' % cell_name)
                         self.quit()
                         return
+                    unistd = None
+                    if cell_name in self.unistd:
+                        unistd = self.unistd[cell_name]
                     unistd32 = None
                     if cell_name in self.unistd32:
                         unistd32 = self.unistd32[cell_name]
                     root_prefix = self.comp_dict[cell_name]['RESIM_ROOT_PREFIX']
                     task_utils = taskUtils.TaskUtils(cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], 
-                        self.unistd[cell_name], unistd32, self.run_from_snap, self.lgr, root_prefix=root_prefix)
+                        unistd, unistd32, self.run_from_snap, self.lgr, root_prefix=root_prefix)
                     self.task_utils[cell_name] = task_utils
                 elif self.isWindows(target=cell_name):
                     self.task_utils[cell_name] = winTaskUtils.WinTaskUtils(cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], self.run_from_snap, self.lgr) 
@@ -1080,11 +1084,14 @@ class GenMonitor():
                             task_utils = winTaskUtils.WinTaskUtils(cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], self.run_from_snap, self.lgr) 
                             swapper = task_utils.getSystemProcRec()
                         else: 
+                            unistd = None
+                            if cell_name in self.unistd:
+                                unistd = self.unistd[cell_name]
                             unistd32 = None
                             if cell_name in self.unistd32:
                                 unistd32 = self.unistd32[cell_name]
                             task_utils = taskUtils.TaskUtils(cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], 
-                                self.unistd[cell_name], unistd32, self.run_from_snap, self.lgr)
+                                unistd, unistd32, self.run_from_snap, self.lgr)
                             swapper = task_utils.findSwapper()
                         if swapper is None:
                             self.lgr.debug('doInit cell %s taskUtils failed to get swapper, hack harder' % cell_name)
