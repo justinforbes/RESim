@@ -593,9 +593,20 @@ class PageFaultGen():
                      self.faultCallback, self.cpu, undefined_instruction) 
             #self.lgr.debug('pageFaultGen watching Core_Exception faults')
         elif self.cpu.architecture == 'arm64':
-            self.lgr.debug('pageFaultGen watchPageFaults set break at at arm entry 0x%x current_context %s' % (self.param.arm64_entry, self.cpu.current_context))
-            proc_break = self.context_manager.genBreakpoint(use_context, Sim_Break_Linear, Sim_Access_Execute, self.param.arm64_entry, self.mem_utils.WORD_SIZE, 0)
-            self.fault_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.pageFaultHap, compat32, proc_break, name='watchPageFaults')
+            if self.param.arm64_entry is not None and self.param.arm_entry is not None:
+                self.lgr.debug('pageFaultGen watchPageFaults both ARM entries, set break at at arm64 entry 0x%x and arm_entry 0x%x current_context %s' % (self.param.arm64_entry, 
+                      self.param.arm_entry, self.cpu.current_context))
+                proc_break = self.context_manager.genBreakpoint(use_context, Sim_Break_Linear, Sim_Access_Execute, self.param.arm64_entry, self.mem_utils.WORD_SIZE, 0)
+                proc_break2 = self.context_manager.genBreakpoint(use_context, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, self.mem_utils.WORD_SIZE, 0)
+                self.fault_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.pageFaultHap, compat32, proc_break, proc_break2, name='watchPageFaults')
+            else:
+                if self.param.arm64_entry is not None:
+                    self.lgr.debug('pageFaultGen watchPageFaults set break at at arm64 entry 0x%x current_context %s' % (self.param.arm64_entry, self.cpu.current_context))
+                    proc_break = self.context_manager.genBreakpoint(use_context, Sim_Break_Linear, Sim_Access_Execute, self.param.arm64_entry, self.mem_utils.WORD_SIZE, 0)
+                else:
+                    self.lgr.debug('pageFaultGen watchPageFaults NO arm64 entry, set break at at arm entry 0x%x current_context %s' % (self.param.arm_entry, self.cpu.current_context))
+                    proc_break = self.context_manager.genBreakpoint(use_context, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, self.mem_utils.WORD_SIZE, 0)
+                self.fault_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.pageFaultHap, compat32, proc_break, name='watchPageFaults')
             self.fault_hap1 = RES_hap_add_callback_obj_range("Core_Exception", self.cpu, 0,  self.faultCallback, self.cpu, 3, 5) 
         elif self.cpu.architecture == 'ppc32':
             proc_break = self.context_manager.genBreakpoint(use_context, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, 1, 0)
