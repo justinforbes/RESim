@@ -46,10 +46,10 @@ class ParamRefTrackerXP():
             #self.base_params['rsp1'] = esp
             if self.call_name == 'DeviceIoControlFile':
                 self.lgr.debug('Is %s, TBD???' % self.call_name)
-                ioctl_op_map = winSocket.getOpMap()
-                operation = self.mem_utils.readWord32(self.cpu, self.base_params['esp2']) & 0xffffffff
-                if operation in ioctl_op_map:
-                    self.call_name = ioctl_op_map[operation]
+                #ioctl_op_map = winSocket.getOpMap()
+                #operation = self.mem_utils.readWord32(self.cpu, self.base_params['esp2']) & 0xffffffff
+                #if operation in ioctl_op_map:
+                #    self.call_name = ioctl_op_map[operation]
                 
             self.other_addrs = {}
             self.refs = []
@@ -63,7 +63,7 @@ class ParamRefTrackerXP():
             retval = 'call: %s sp: 0x%x cycles: 0x%x\n' % (self.call_name, self.esp, self.start_cycle)
             ptr = self.esp + 8
             for p in self.base_params:
-                retval = '%s %s 0x%x 0x%x\n' % (retval, p, self.base_params[p], self.base_valuse[p])
+                retval = '%s %s 0x%x 0x%x\n' % (retval, p, self.base_params[p], self.base_values[p])
                 ptr = ptr + 4
             index = 1
             for reference in self.refs:

@@ -996,3 +996,16 @@ class WinDLLMap():
         else:
             retval = True
         return retval
+
+    def getFnameForSectionHandle(self, tid, section_handle):
+        retval = None
+        pid = self.pidFromTID(tid)
+
+        if pid in self.sections:
+            if section_handle in self.sections[pid]: 
+               retval = self.sections[pid][section_handle].fname
+            else:
+               self.lgr.debug('winDLL getFnameForSectionHandle tid %s has no section handle 0x%x in sections' % (tid, section_handle))
+        else:
+           self.lgr.debug('winDLL getFnameForSectionHandle tid %s not in sections' % tid)
+        return retval

@@ -378,30 +378,18 @@ class WinTaskUtils():
         return computed
 
     def xpCompute(self, call_num):
-        self.lgr.debug('xpCompute call_num 0x%x' % call_num)
-        #esi_value = self.cur_thread_addr
-        #esi_adjusted = esi_value + 0xe0
-        #self.lgr.debug('xpCompute esi_adjusted 0x%x' % esi_adjusted)
-        #edi_adjust = self.readWord(esi_adjusted)
-        edi_adjust = SIM_read_phys_memory(self.cpu, self.phys_current_task, self.mem_utils.WORD_SIZE)
-        self.lgr.debug('xpCompute edi_adjust 0x%x' % edi_adjust)
-        #self.lgr.debug('call_num 0x%x' % call_num)
-        #shifted = call_num >> 8 
-        #self.lgr.debug('shifted 0x%x' % shifted)
-        #anded = shifted & 0x30
-        #self.lgr.debug('anded 0x%x' % anded)
-        #edi_start = ((call_num >> 8) & 0x30) 
-        edi_start = 0x10
-        self.lgr.debug('xpCompute edi_start 0x%x' % edi_start)
-        edi = edi_start + edi_adjust
-        self.lgr.debug('xpCompute edi now 0x%x' % edi)
-        val_in_edi = self.mem_utils.readWord(self.cpu, edi)
-        self.lgr.debug('xpCompute val_in_edi 0x%x' % val_in_edi)
-        eax_now = call_num & 0xfff
-        call_to_addr = val_in_edi + 4*eax_now
-        self.lgr.debug('xpCompute call_to_addr 0x%x' % call_to_addr)
+        #esi_value = self.getUnsigned(SIM_read_phys_memory(self.cpu, 0x40124, 4))
+        esi_value = SIM_read_phys_memory(self.cpu, self.phys_current_task, self.mem_utils.WORD_SIZE)
+        esi_adjusted = esi_value + 0xe0
+        self.lgr.debug('esi_adjusted 0x%x' % esi_adjusted)
+        edi_adjust = self.mem_utils.readWord(self.cpu, esi_adjusted)
+        self.lgr.debug('edi_adjust 0x%x' % edi_adjust)
+        edi_start = ((call_num >> 8) & 0x30) + edi_adjust
+        self.lgr.debug('edi_start 0x%x' % edi_start)
+        val_in_edi = self.mem_utils.readWord(self.cpu, edi_start)
+        self.lgr.debug('val_in_edi 0x%x' % val_in_edi)
+        call_to_addr = val_in_edi + 4*call_num
         call_to = self.mem_utils.readWord(self.cpu, call_to_addr)
-        self.lgr.debug('xpCompute call_to 0x%x' % call_to)
         return call_to
 
     def curPID(self):
@@ -413,12 +401,20 @@ class WinTaskUtils():
 
     def curTID(self):
         ''' Return pid-thread_id per the current scheduled thread '''
+        pid_thread = None
         cur_task_rec = self.getCurProcRec()
         if cur_task_rec is None:
             return None
         pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
         thread = self.getThreadId()
-        pid_thread = '%d-%d' % (pid, thread)
+        if pid is not None:
+            if thread is not None:
+                pid_thread = '%d-%d' % (pid, thread)
+            else:
+                self.lgr.debug('winTaskUtis curTID failed to get thread id for pid %d' % pid)
+        else:
+            self.lgr.debug('winTaskUtis curTID failed to pid')
+        
         return pid_thread
 
     def curThread(self):
@@ -515,12 +511,16 @@ class WinTaskUtils():
         return frame
 
 
-    def frameForXPEnter(self):
+    def frameForXPEnter(self, computed=False):
         frame = {}
         stack_ptr = self.mem_utils.getRegValue(self.cpu, 'edx')
+        frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'eip')
         frame['sp'] = stack_ptr
-        stack_ptr = stack_ptr + 8
-        for i in range (1, 9):
+        if not computed:
+            stack_ptr = stack_ptr + 8
+        else:
+            frame['sp'] = stack_ptr - 8
+        for i in range (1, 12):
             param = 'param%d' % i
             frame[param] = self.mem_utils.readWord(self.cpu, stack_ptr)
             stack_ptr = stack_ptr + 4

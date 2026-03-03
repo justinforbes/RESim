@@ -6670,6 +6670,7 @@ class GenMonitor():
             retval = self.context_manager[self.target].loadIgnoreList(sfile)
             if retval:
                 print('Loaded list of programs to ignore from %s' % sfile)
+                self.lgr.debug('ignoreProgList Loaded list of programs to ignore from %s' % sfile)
         return retval
 
     def ignoreThreadList(self):
@@ -7290,6 +7291,9 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         pc = self.mem_utils[self.target].getKReturnAddr(cpu)
         print('ELR is 0x%x' % pc)
+
+    def osType(self, target):
+        return self.os_type[target]
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

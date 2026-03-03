@@ -165,7 +165,7 @@ class WinCallExit():
                 trace_msg = trace_msg + ' fname_addr: 0x%x fname: %s Handle: 0x%x' % (exit_info.fname_addr, exit_info.fname, fd)
                 self.lgr.debug('winCallExit %s' % (trace_msg))
                
-                if self.top.trackingThreads() and (self.soMap is not None and (exit_info.fname.lower().endswith('.nls') or exit_info.fname.lower().endswith('.dll') or exit_info.fname.lower().endswith('.so'))):
+                if self.top.trackingThreads() and (self.soMap is not None and (exit_info.fname.lower().endswith('.nls') or exit_info.fname.lower().endswith('.dll') or exit_info.fname.lower().endswith('.so') or exit_info.fname.lower().endswith('.exe'))):
                     self.lgr.debug('winCallExit adding fname: %s with fd: %d to tid:%s' % (exit_info.fname, fd, tid))
                     self.soMap.addFile(exit_info.fname, fd, tid)
 
@@ -189,7 +189,7 @@ class WinCallExit():
                         self.lgr.debug('adding fname: %s with fd: %d to tid:%s' % (exit_info.fname, fd, tid))
                         self.soMap.addFile(exit_info.fname, fd, tid)
         
-                    elif exit_info.fname.endswith('Endpoint'):
+                    elif exit_info.fname.endswith('Endpoint') and exit_info.sock_struct is not None:
                         # gross speculation based on observation
                         socket_type = exit_info.sock_struct[36]
                         if tid not in self.tid_sockets:
