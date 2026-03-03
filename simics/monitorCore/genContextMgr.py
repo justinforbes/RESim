@@ -1676,10 +1676,11 @@ class GenContextMgr():
                 self.lgr.error('contextManager loadIgnoreList no file at %s' % fname)
         if retval:
             cur_tid = self.task_utils.curTID()
-            comm = self.task_utils.getCommFromTid(cur_tid) 
-            if comm in self.ignore_progs:
-                self.lgr.debug('contextManager loadIgnoreList current comm of %s should be ignored, so set ignore context' % comm)
-                self.restoreIgnoreContext()
+            if cur_tid is not None:
+                comm = self.task_utils.getCommFromTid(cur_tid) 
+                if comm in self.ignore_progs:
+                    self.lgr.debug('contextManager loadIgnoreList current comm of %s should be ignored, so set ignore context' % comm)
+                    self.restoreIgnoreContext()
 
         return retval
 
@@ -1760,7 +1761,7 @@ class GenContextMgr():
                 self.watch_for_prog.remove(comm)
                 # make the callback call.  TBD only one callback per comm
                 callback = self.watch_for_prog_callback[comm]
-                self.top.doInUser(callback, None, tid=tid, target=self.cell_name)
+                self.top.doInUser(callback, tid, tid=tid, target=self.cell_name)
                 del self.watch_for_prog_callback[comm]
 
 
