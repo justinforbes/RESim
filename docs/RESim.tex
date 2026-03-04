@@ -1064,7 +1064,7 @@ entry lets you pick one of the following alternate ethernet devices:
 i82559
 i82546bg
 i82543gc
-am79c973
+dec21041
 \end{verbatim}
 
 If using a VLAN, select the 82559.  The i82543gc does not properly support VLANs.
@@ -3168,7 +3168,8 @@ then restores them and copies them to the merged directory.
 \item winProgSizes.py -- Use this to create a file you will name with the WORD\_SIZES target value in an ini file.  The utility will parse a log file 
 to determine the names of programs that are created, and it will then look in your ROOT\_PREFIX directory for those to determine whether the program is 32 or
 64 bit.  Use the {\tt runToCall('CreateUserProcess', linger=True)} command to generate a suitable log file for parsing.
-\item buildExecDict.py -- Builds a dictionary of executable files.
+\item buildExecDict.py -- Builds a dictionary of executable files relative to ROOT\_PREFIX.  This is an optimization for Windows systems that tend to have zillions of
+files, aiding the system in locating files named in a debugProc.  Run this from the workspace naming the ini file.
 \item findProgRename.py -- Read a trace file to find SET\_NAME operations that change the comm of a thread.  Creates a json of those in the analysis directory
 which is then used by RESim to equate the comms.
 \item arch-tar.sh -- Archive fuzzing artifacts and optionally a workspace.  See the script for details.
@@ -4137,6 +4138,10 @@ Windows page table management differs from Linux in that directory table entries
 set a break on the start of a table directory.  When that break it hit, we can then wait until a return to user mode at which time the
 table will be populated.  Windows seems to update table entries individually.  This requires divergence in the coverage module.  Or maybe this is just a 32/64 bit thing.
 
+\subsection{Windows program names}
+Windows case-insensitive file naming can lead to extremely slow responses to {\tt debugProc}, which must find the program under the root prefix.  Use the
+buildExecDict.py utility to optimize these searches.
+
 \subsection{Windows Kernel Parameters}
 The {\tt getKernelParams.py} program creates {\tt param} files containing Windows kernel parameters required by RESim.  These include the address hit by the {\tt sysenter} instruction, 
 the instruction from which the kernel returns to user space, and values needed to reflect the jump table used by the kernel to vector different system calls to their respective
@@ -4590,7 +4595,7 @@ Current task?
 Computed jump:
   esi_value = readWord(ptr_to_current_thread + 0x124)(
   esi_adjusted = esi_value + 0xe0
-  edi_adjust = readWord(esi_adjusted)
+  edi_adjust = readWord(edi_adjusted)
   edi_start = ((call_num >> 8) & 0x30) + esi_adjust
   val_in_edi = readWord(edi_start)
   call_to_addr = val_in_edi + 4*call_num
