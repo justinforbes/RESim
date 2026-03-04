@@ -165,7 +165,7 @@ class WinCallExit():
                 trace_msg = trace_msg + ' fname_addr: 0x%x fname: %s Handle: 0x%x' % (exit_info.fname_addr, exit_info.fname, fd)
                 self.lgr.debug('winCallExit %s' % (trace_msg))
                
-                if self.top.trackingThreads() and (self.soMap is not None and (exit_info.fname.lower().endswith('.nls') or exit_info.fname.lower().endswith('.dll') or exit_info.fname.lower().endswith('.so') or exit_info.fname.lower().endswith('.exe'))):
+                if (self.top.trackingThreads() or (self.top.osType(self.cell_name) == 'WINXP' and exit_info.syscall_instance.name == 'CreateProcessEx')) and (self.soMap is not None and (exit_info.fname.lower().endswith('.nls') or exit_info.fname.lower().endswith('.dll') or exit_info.fname.lower().endswith('.so') or exit_info.fname.lower().endswith('.exe'))):
                     self.lgr.debug('winCallExit adding fname: %s with fd: %d to tid:%s' % (exit_info.fname, fd, tid))
                     self.soMap.addFile(exit_info.fname, fd, tid)
 
@@ -249,8 +249,12 @@ class WinCallExit():
 
         elif callname == 'MapViewOfSection':
             section_handle = exit_info.old_fd
-            load_address = exit_info.syscall_instance.paramOffPtr(3, [0], exit_info.frame, word_size)
-            size = exit_info.syscall_instance.stackParamPtr(3, 0, exit_info.frame) 
+            if self.top.os_type == 'WINXP':
+                size = self.mem_utils.readWord(self.cpu, exit_info.frame['param7'])
+                load_address = self.mem_utils.readWord(self.cpu, exit_info.frame['param3'])
+            else:
+                load_address = exit_info.syscall_instance.paramOffPtr(3, [0], exit_info.frame, word_size)
+                size = exit_info.syscall_instance.stackParamPtr(3, 0, exit_info.frame) 
             if load_address is not None and size is not None:
                 trace_msg = trace_msg+' section_handle: 0x%x load_address: 0x%x size: 0x%x' % (section_handle, load_address, size)
                 self.lgr.debug('winCallExit '+trace_msg)
@@ -258,7 +262,10 @@ class WinCallExit():
                     self.soMap.mapSection(tid, section_handle, load_address, size)
             else:
                 #self.lgr.debug('winCallExit %s tid:%s (%s) fd: 0x%x returned bad load address or size?' % (callname, tid, comm, exit_info.old_fd))
-                trace_msg = trace_msg+' section_handle: 0x%x bad load address or size' % (section_handle)
+                if load_address is not None:
+                    trace_msg = trace_msg+' section_handle: 0x%x bad load address' % (section_handle)
+                else:
+                    trace_msg = trace_msg+' section_handle: 0x%x bad size' % (section_handle)
                 self.lgr.debug('winCallExit not tracking threads '+trace_msg)
 
         elif callname in ['CreateEvent', 'OpenProcessToken', 'OpenProcess']:

@@ -196,6 +196,7 @@ class WinSyscall():
         self.pending_calls = {}
 
         self.os_type = top.getTargetEnv('OS_TYPE', target=cell_name)
+        self.lgr.debug('winSyscall os_type %s' % self.os_type)
 
     def breakOnProg(self):
         for call in self.call_params:
@@ -596,7 +597,7 @@ class WinSyscall():
         #    word_size = 4
         #self.lgr.debug('hacky sp is 0x%x ws %d' % (user_sp, word_size))
         do_stop_from_call = False
-        #self.lgr.debug('syscallParse syscall name: %s tid:%s callname <%s> params: %s' % (self.name, tid, callname, str(self.call_params)))
+        self.lgr.debug('syscallParse syscall name: %s tid:%s callname <%s> params: %s' % (self.name, tid, callname, str(self.call_params)))
         for call_param in self.call_params:
             if call_param.match_param.__class__.__name__ == 'TidFilter':
                 if tid != call_param.match_param.tid:
@@ -644,8 +645,8 @@ class WinSyscall():
         frame_string = taskUtils.stringFromFrame(frame)
         self.lgr.debug(frame_string)
         #trace_msg = 'tid:%s (%s) %s %s' % (tid, comm, callname, frame_string)
-        #self.lgr.debug('winSyscall syscallParse '+trace_msg)
         trace_msg = 'tid:%s (%s) %s' % (tid, comm, callname)
+        self.lgr.debug('winSyscall syscallParse os_type %s trace_msg: %s ' % (self.os_type, trace_msg))
         if callname == 'CreateProcessEx':
             object_attr = frame['param3']
             if self.os_type == 'WINXP':
@@ -681,12 +682,23 @@ class WinSyscall():
                     trace_msg = trace_msg+' prog: %s fname_addr: 0x%x retval_addr: 0x%x (handle addr)' % (prog, exit_info.fname_addr, exit_info.retval_addr)
             self.lgr.debug(trace_msg)
             want_to_debug = False
+            if self.name == 'CreateProcessEx': 
+                #checkProg will initiate debug sequence '''
+                want_to_debug = self.checkProg(prog, tid, exit_info)
+                if want_to_debug:
+                    ''' remove param, no more syscall processing here '''
+                    self.lgr.debug('winSyscall cup wants to debug?  do not add call_param')
+                else:
+                    for param in self.call_params:
+                        if param.name == 'toCreateProc':
+                            exit_info.call_params.append(param)
             if not want_to_debug and prog is not None:
                 self.lgr.debug('winSyscall cup add %s as pending proc' % prog)
                 self.soMap.addPendingProc(prog)
                 base = ntpath.basename(prog)
                 if self.top.trackingThreads(): 
-                    want_comm = base[:taskUtils.COMM_SIZE-1]
+                    comm_size = self.task_utils.commSize()
+                    want_comm = base[:comm_size]
                     self.lgr.debug('winSyscall is tracking threads base %s' % want_comm)
                     self.context_manager.callWhenFirstScheduled(want_comm, self.recordLoadAddr)
 
@@ -1075,7 +1087,8 @@ class WinSyscall():
         elif callname in ['OpenFile', 'OpenKeyEx', 'OpenKey', 'OpenSection']:
             object_attr = frame['param3']
             if self.os_type == 'WINXP':
-                str_size = self.paramOffPtr(3, [0xc], frame, word_size) 
+                str_size_addr = self.paramOffPtr(3, [0x8], frame, word_size) 
+                str_size = self.mem_utils.readWord16(self.cpu, str_size_addr)
                 self.lgr.debug('winSyscall %s str_size 0x%x' % (callname, str_size))
             else:
                 str_size_addr = self.paramOffPtr(3, [0x10], frame, word_size) 
@@ -1209,6 +1222,7 @@ class WinSyscall():
             else:
                 trace_msg = trace_msg+' Handle: None'
             self.lgr.debug(trace_msg)
+            exit_info = self.genericCallParams(syscall_info, exit_info, callname)
 
         elif callname in ['CreateThread', 'CreateThreadEx']:
             exit_info.retval_addr = frame['param1']
@@ -1469,13 +1483,13 @@ class WinSyscall():
         cp = None
         for call in self.call_params:
             #self.lgr.debug('checkProg call %s' % call)
-            if call.subcall == 'CreateUserProcess':
+            if call.subcall in ['CreateUserProcess', 'CreateProcessEx']:
                 cp = call
                 break
         if cp is None:
             for call in self.call_params:
                 self.lgr.debug('checkProg traceall call %s' % call)
-                if call.subcall == 'CreateUserProcess':
+                if call.subcall in ['CreateUserProcess', 'CreateProcessEx']:
                     cp = call
                     break
             
@@ -1943,11 +1957,11 @@ class WinSyscall():
                     self.lgr.debug('syscall %s, found match_param %s param.subcall %s' % (callname, call_param.match_param, call_param.subcall))
                     syscall.addParam(exit_info, call_param)
                     break
-                elif call_param.name == 'trackSO':
+                elif call_param.name == 'trackSO' or (call_param.name == 'toCreateProc' and self.os_type == 'WINXP'):
                     syscall.addParam(exit_info, call_param)
                     got_something = True
                 else:
-                    self.lgr.debug('winSyscall genericCallParams match_param is str, no match, set retval to None')
+                    self.lgr.debug('winSyscall genericCallParams param %s match_param is str, no match, set retval to None' % call_param.name)
                     ignore_if_not_got_something = True
             elif call_param.name == 'trackSO':
                 got_something = True
@@ -2314,12 +2328,16 @@ class WinSyscall():
         if comm is None:
             self.lgr.debug('winSyscall doRecordLoad called with comm of None, bail')
             return
-        eproc = self.task_utils.getProcRecForTid(tid)
-        self.lgr.debug('winSyscall doRecordLoad addr tid:%s (%s) eproc 0x%x' % (tid, comm, eproc))
-        load_addr = winProg.getLoadAddress(self.cpu, self.mem_utils, eproc, comm, self.lgr)
-        if load_addr is None:
-            self.lgr.error('winSyscall doRecordLoad failed to get load addess for %s' % tid)
-            return
+        if self.os_type == 'WINXP':
+            load_addr = 0
+        else:
+            eproc = self.task_utils.getProcRecForTid(tid)
+            self.lgr.debug('winSyscall doRecordLoad addr tid:%s (%s) eproc 0x%x' % (tid, comm, eproc))
+            load_addr = winProg.getLoadAddress(self.cpu, self.mem_utils, eproc, comm, self.lgr)
+            if load_addr is None:
+                self.lgr.error('winSyscall doRecordLoad failed to get load address for %s' % tid)
+                SIM_break_simulation('remove this')
+                return
         prog = self.soMap.findPendingProg(comm)
         if prog is None:
             self.lgr.error('winSyscall doRecordLoad failed to get pending prog for %s (%s)' % (tid, comm))

@@ -225,7 +225,11 @@ class WinTaskUtils():
                 self.lgr.error('winTaskUtils did not find %s for snap %s' % (exec_addrs_file, run_from_snap))
 
     def commSize(self):
-        return 14
+        
+        if self.os_type == 'WINXP':
+            return 15
+        else:
+            return 14
 
     def getPhysCurrentTask(self):
         return self.phys_current_task
