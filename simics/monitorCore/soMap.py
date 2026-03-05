@@ -802,6 +802,9 @@ class SOMap():
                     retval = ptid
                 else:
                     comm = self.task_utils.getCommFromTid(tid)
+                    if comm is None:
+                        self.lgr.error('SOMap getSOTid no comm for tid:%s' % (tid))
+                        return None
                     tid_list = self.task_utils.getTidsForComm(comm)
                     self.lgr.debug('SOMap getSOTid try thread tids, len %d' % (len(tid_list)))
                     for try_tid in tid_list:
