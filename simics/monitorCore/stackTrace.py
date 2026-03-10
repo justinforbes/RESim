@@ -87,7 +87,7 @@ class StackTrace():
         self.cpu = cpu
         if self.cpu.architecture in ['arm', 'arm64']:
             self.decode = decodeArm
-        if self.cpu.architecture in ['ppc32']:
+        elif self.cpu.architecture in ['ppc32']:
             self.decode = decodePPC32
         else:
             self.decode = decode
@@ -133,27 +133,14 @@ class StackTrace():
         # for tracking ppc bctrl instructions
         self.recent_bctrl = None
         cur_eip = self.top.getEIP(cpu=cpu)
+        self.was_thumb = False
         if self.mem_utils.isKernel(cur_eip):
             self.lgr.error('stackTrace called from within kernel.  No support for that yet.')
         else:
             self.doTrace()
 
     def isCall(self, instruct):
-        mn = self.decode.getMn(instruct)
-        retval = False
-        if self.cpu.architecture in ['arm', 'arm64']:
-            if mn.startswith('bl'):
-                retval = True
-        elif self.cpu.architecture in ['ppc32']:
-            if mn == 'bl':
-                retval = True
-            elif mn == 'bctrl':
-                self.lgr.debug('stackTrace got bctrl')
-                retval = True
-        else:
-            if mn == 'call':
-                retval = True
-        return retval
+        return self.decode.isCall(instruct)
 
     def isJmp(self, instruct):
         mn = self.decode.getMn(instruct[1])
@@ -178,7 +165,7 @@ class StackTrace():
         if self.cpu.architecture in ['arm', 'arm64', 'ppc32']:
             #self.lgr.debug('followCall return_to 0x%x' % return_to)
             eip = return_to - 4
-            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            instruct = self.disassemble(eip)
             #self.lgr.debug('followCall instruct is %s' % instruct[1])
             #if self.decode.isCall(self.cpu, instruct[1], ignore_flags=True):
             if self.isCall(instruct[1]):
@@ -199,7 +186,7 @@ class StackTrace():
                 # not always 2* word size?
                 count = 0
                 while retval is None and count < 4*self.mem_utils.wordSize(self.cpu) and eip>0:
-                    instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+                    instruct = self.disassemble(eip)
                     #self.lgr.debug('stackTrace followCall count %d eip 0x%x instruct %s len %d' % (count, eip, instruct[1], instruct[0]))
                     # TBD hack.  Fix this by getting bb start and walking forward? only if we have the analysis. if not then rely on hack. 
                     if self.isCall(instruct[1]) and 'call far ' not in instruct[1] and (eip + instruct[0]) == return_to:
@@ -331,19 +318,32 @@ class StackTrace():
                     self.lgr.debug('stackTrace isCallToMe lr was current function, try r0 0x%x' % lr) 
                 if cur_fun != ret_to:
                     try:
-                        instruct = SIM_disassemble_address(self.cpu, call_instr, 1, 0)
+                        instruct = self.disassemble(call_instr)
+                        if 'illegal memory' in instruct[1]:
+                            self.lgr.debug('stackTrace isCallToMe could not disassemble instruct from 0x%x' % call_instr)
+                            return retval 
+     
                     except OverflowError:
                         self.lgr.debug('stackTrace isCallToMe could not get instruct from 0x%x' % call_instr)
                         return retval 
+                    self.lgr.debug('stackTrace isCallToMe instruct %s' % instruct[1])
+                    # Cannot alter cspr while running! would alter state anyway.  Use capstone if needed
+                    if not self.isCall(instruct[1]) and (self.cpu.architecture == 'arm' or (self.cpu.architecture == 'arm64' and not self.cpu.in_aarch64)):
+                        thumb = memUtils.isThumb(self.cpu)
+                        self.lgr.debug('stackTrace isCallToMe thumb: %r' % thumb)
+                        if thumb:
+                            self.was_thumb = True
+                            instruct = self.disassemble(call_instr)
+                            self.lgr.debug('stackTrace isCallToMe cleared thumb and got instruct %s' % instruct[1])
                     if self.isCall(instruct[1]):
                         fun_hex, fun = self.fun_mgr.getFunNameFromInstruction(instruct, call_instr)
                         op2, op1 = self.decode.getOperands(instruct[1])
-                        #if fun_hex is None:
-                        #    self.lgr.debug('stackTrace isCallToMe fun_hex was None for instruct %s at 0x%x' % (instruct[1], call_instr))
-                        #    pass
-                        #elif cur_fun is not None:
-                        #    self.lgr.debug('isCallToMe is call fun_hex is 0x%x fun %s cur_fun %x call_instr 0x%x' % (fun_hex, fun, cur_fun, call_instr))
-                        #    pass
+                        if fun_hex is None:
+                            self.lgr.debug('stackTrace isCallToMe fun_hex was None for instruct %s at 0x%x' % (instruct[1], call_instr))
+                            pass
+                        elif cur_fun is not None:
+                            self.lgr.debug('isCallToMe is call fun_hex is 0x%x fun %s cur_fun %x call_instr 0x%x' % (fun_hex, fun, cur_fun, call_instr))
+                            pass
                         if (fun_hex is not None and fun_hex == cur_fun) or (fun is not None and self.funMatch(fun, fun_name, call_instr, False)):
                             if fun is not None:
                                 new_instruct = '%s   %s' % (self.callmn, fun)
@@ -377,7 +377,7 @@ class StackTrace():
                                 retval = (lr, adjust_sp)
                             else:
                                 # see if fun_hex is a direct branch 
-                                first_instruct = SIM_disassemble_address(self.cpu, fun_hex, 1, 0)
+                                first_instruct = self.disassemble(fun_hex)
                                 if first_instruct[1].startswith('b '):
                                     #self.lgr.debug('isCallToMe may be direct branch cur_fun 0x%x  instruct %s' % (cur_fun, first_instruct[1]))
                                     parts = first_instruct[1].split()
@@ -455,9 +455,9 @@ class StackTrace():
         #self.lgr.debug('stackTrace tryGot eip: 0x%x fun_hex 0x%x cur_lib %s lr_lib %s' % (eip, fun_hex, cur_lib, lr_lib))
         if cur_lib != lr_lib:
             ''' is 2nd instruction a load of PC? '''
-            instruct = SIM_disassemble_address(self.cpu, fun_hex, 1, 0)
+            instruct = self.disassemble(fun_hex)
             second_fun_eip = fun_hex + instruct[0]
-            second_instruct = SIM_disassemble_address(self.cpu, second_fun_eip, 1, 0)
+            second_instruct = self.disassemble(second_fun_eip)
             #self.lgr.debug('1st %s 2nd %s' % (instruct[1], second_instruct[1]))
             parts = second_instruct[1].split()
             if instruct[1].startswith('adrp'):
@@ -468,7 +468,7 @@ class StackTrace():
                 retval = True
             else:
                 third_fun_eip = fun_hex + instruct[0]+second_instruct[0]
-                third_instruct = SIM_disassemble_address(self.cpu, third_fun_eip, 1, 0)
+                third_instruct = self.disassemble(third_fun_eip)
                 #self.lgr.debug('3nd %s' % (third_instruct[1]))
                 parts = third_instruct[1].split()
                 if parts[0].upper() == "LDR" and parts[1].upper() == "PC,":
@@ -562,6 +562,9 @@ class StackTrace():
             if bctrl_fun == fun2:
                 self.lgr.debug('stackTrace funMatch check bctrl got match')
                 retval = True
+
+        if not retval and fun1.startswith('g_') and fun1[2:] == fun2:
+            retval = True
         return retval
 
     def doX86(self):
@@ -591,7 +594,7 @@ class StackTrace():
             #self.lgr.debug('doX86 bp is zero')
             if call_inst is not None:
                 #self.lgr.debug('doX86 initial sp value 0x%x is a return to address.  call_inst: 0x%x' % (stack_val, call_inst))
-                instruct = SIM_disassemble_address(self.cpu, call_inst, 1, 0)
+                instruct = self.disassemble(call_inst)
                 #this_fun_name = self.funFromAddr(cur_fun)
                 this_fun_name = 'unknown'
                 call_addr, fun_name = self.fun_mgr.getFunNameFromInstruction(instruct, call_inst)
@@ -691,7 +694,7 @@ class StackTrace():
             if call_inst is not None:
                 added_frame = False
                 self.lgr.debug('stackTrace doX86 ret_to 0x%x followed call, call inst addr 0x%x' % (ret_to, call_inst))
-                instruct = SIM_disassemble_address(self.cpu, call_inst, 1, 0)
+                instruct = self.disassemble(call_inst)
                 call_addr, fun_name = self.fun_mgr.getFunNameFromInstruction(instruct, call_inst)
                 instruct_1 = self.fun_mgr.resolveCall(instruct, call_inst)
                 fname = self.soMap.getSOFileFull(call_inst)
@@ -772,7 +775,7 @@ class StackTrace():
         esp = self.reg_frame['sp']
         current_instruct = None
         if eip is not None:
-            current_instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)[1]
+            current_instruct = self.disassemble(eip)[1]
             #lib_file = self.top.getSO(eip)
             lib_file = self.soMap.getSOFileFull(eip)
             if resimUtils.isClib(lib_file):
@@ -815,7 +818,7 @@ class StackTrace():
                         else:
                             self.lgr.debug('stackTrace findReturnFromCall, still no curfun call_ip was 0x%x' % call_ip)
                             pass
-                    instruct_of_call = SIM_disassemble_address(self.cpu, call_ip, 1, 0)
+                    instruct_of_call = self.disassemble(call_ip)
                     instruct = instruct_of_call[1]
                     self.lgr.debug('stackTrace findReturnFromCall call_ip 0x%x  %s' % (call_ip, instruct))
                     call_addr, fun_name = self.fun_mgr.getFunNameFromInstruction(instruct_of_call, call_ip)
@@ -876,7 +879,7 @@ class StackTrace():
         # instruct_of_call -- call instruction
         # call_ip  -- address of call call instruction
         retval = None
-        first_instruct = SIM_disassemble_address(self.cpu, call_addr, 1, 0)
+        first_instruct = self.disassemble(call_addr)
         call_to_actual, actual_fun = self.checkRelocate(call_addr)
         #self.lgr.debug('stackTrace isGOT call_addr 0x%x first_instruct is %s cur_fun_name %s fname %s instruct_of_call %s call_ip 0x%x cur_is_clib %r' % (call_addr, first_instruct[1], cur_fun_name, fname, instruct_of_call, call_ip, cur_is_clib))
         skip_this = False
@@ -956,7 +959,7 @@ class StackTrace():
     def getCallTo(self, call_ip): 
         fun_name = None
         call_to = None
-        instruct = SIM_disassemble_address(self.cpu, call_ip, 1, 0)[1]
+        instruct = self.disassemble(call_ip)[1]
         op2, op1 = self.decode.getOperands(instruct)
         #self.lgr.debug('stackTrace getCallTo call_ip 0x%x instruct %s op1 %s' % (call_ip, instruct, op1))
         if (not self.cpu.architecture == 'ppc32' and instruct.startswith('blr')) or (instruct.startswith('call') and self.decode.isReg(op1)):
@@ -999,7 +1002,7 @@ class StackTrace():
         esp = self.reg_frame['sp']
         eip = self.reg_frame['pc']
 
-        instruct_tuple = SIM_disassemble_address(self.cpu, eip, 1, 0)
+        instruct_tuple = self.disassemble(eip)
         instruct = instruct_tuple[1]
         '''
         if self.mem_utils.isKernel(eip):
@@ -1311,7 +1314,7 @@ class StackTrace():
                         if self.fun_mgr.isFun(call_to):
                             self.lgr.debug('stackTrace call_to 0x%x is fun prev_ip is 0x%x' % (call_to, prev_ip))
                             if not self.fun_mgr.inFun(prev_ip, call_to, call_ip=ip_of_call_instruct):
-                                first_instruct = SIM_disassemble_address(self.cpu, call_to, 1, 0)
+                                first_instruct = self.disassemble(call_to)
                                 #self.lgr.debug('stackTrace not inFun.  first_instruct is %s' % first_instruct[1])
                                 if self.cpu.architecture in ['arm', 'arm64', 'ppc32'] and first_instruct[1].lower().startswith('b '):
                                     skip_this = self.checkArmDirect(first_instruct, call_to, prev_ip, ptr, fname, ip_of_call_instruct)
@@ -1333,7 +1336,7 @@ class StackTrace():
                             else:
                                 # inFun returned true
                                 #self.lgr.debug('stackTrace is in the function. skip_this is %r' % skip_this)
-                                instruct = SIM_disassemble_address(self.cpu, ip_of_call_instruct, 1, 0)
+                                instruct = self.disassemble(ip_of_call_instruct)
                                 fun_hex, fun_name = self.fun_mgr.getFunNameFromInstruction(instruct, ip_of_call_instruct)
                                 call_instruction = instruct[1]
                                 if fun_hex is None and call_to is not None:
@@ -1345,7 +1348,7 @@ class StackTrace():
                                 frame, adjust_sp = self.genFrame(ip_of_call_instruct, call_instruction, ptr, fun_hex, fun_name, ret_addr, ptr, msg='simple call')
                                 ptr = ptr+adjust_sp
                         else:
-                            tmp_instruct = SIM_disassemble_address(self.cpu, call_to, 1, 0)
+                            tmp_instruct = self.disassemble(call_to)
                             self.lgr.debug('stackTrace call_to 0x%x is not a fun, instruct is %s' % (call_to, tmp_instruct[1]))
 
                             if self.isJmp(tmp_instruct):
@@ -1366,7 +1369,7 @@ class StackTrace():
                 if ip_of_call_instruct is not None and not skip_this:
                     #self.lgr.debug('stackTrace ip_of_call_instruct 0x%x' % ip_of_call_instruct)
                     skip_this = False
-                    instruct = SIM_disassemble_address(self.cpu, ip_of_call_instruct, 1, 0)
+                    instruct = self.disassemble(ip_of_call_instruct)
                     fun_addr = None 
                     fun_name = None 
                     instruct_str = instruct[1]
@@ -1508,7 +1511,7 @@ class StackTrace():
                             if not skip_this and prev_ip is not None and self.soMap.isMainText(val):
                                 if not self.soMap.isMainText(prev_ip):
                                     self.lgr.debug('stackTrace val 0x%x in main (%s), prev 0x%x (%s) was not' % (val, fname, prev_ip, prev_fname))
-                                    call_instruct = SIM_disassemble_address(self.cpu, ip_of_call_instruct, 1, 0)
+                                    call_instruct = self.disassemble(ip_of_call_instruct)
                                     self.lgr.debug('stackTrace call instruct %s' % (call_instruct[1]))
                                     if 'bctrl' in call_instruct[1]:
                                         self.lgr.debug('stackTrace bctrl at clib boundary, bail')
@@ -1592,13 +1595,16 @@ class StackTrace():
             elif self.max_bytes is not None and count > self.max_bytes:
                 #self.lgr.debug('stackFrames got max bytes %d, done' % self.max_bytes)
                 done = True
-    
+        if self.was_thumb:
+            self.was_thumb = False
+            self.lgr.debug('stackTrace set was_thumb to false')
+
     def checkVxDirect(self, function_addr, fname):
         ''' Does the given funtion have an early direct branch to a vxworks function? '''
         skip_this = True
         pc = function_addr
         for i in range(5):
-            instruct = SIM_disassemble_address(self.cpu, pc, 1, 0)
+            instruct = self.disassemble(pc)
             #self.lgr.debug('stackTrace checkVxDirect, is %s' % instruct[1])
             if instruct[1].startswith('b '):
                 parts = instruct[1].split()
@@ -1634,7 +1640,7 @@ class StackTrace():
 
     def checkGOTJmp(self, ptr, call_to, cur_fun, fname, call_ip, first_instruct, skip_clib):
         skip_this = False
-        instruct_of_call = SIM_disassemble_address(self.cpu, call_ip, 1, 0)
+        instruct_of_call = self.disassemble(call_ip)
         cur_fun_name = self.fun_mgr.getFunName(cur_fun)
         return_addr = self.isGOT(ptr, call_to, cur_fun, cur_fun_name, instruct_of_call, call_ip, fname, False, skip_clib=skip_clib)
         if return_addr is not None:
@@ -1661,7 +1667,7 @@ class StackTrace():
     def checkRelocate(self, eip):
         fun_hex = None
         fun = None
-        first_instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+        first_instruct = self.disassemble(eip)
         #self.lgr.debug('stackTrace checkRelocate first instruct %s ip 0x%x' % (first_instruct[1], eip))
         if first_instruct[1].startswith('jmp'):
             fun_hex, fun = self.fun_mgr.getFunNameFromInstruction(first_instruct, eip)
@@ -1670,7 +1676,7 @@ class StackTrace():
     def isPLT(self, eip):
         # TBD replace this ad hoc hack with analysis output telling us where the PLT is
         retval = False
-        first_instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+        first_instruct = self.disassemble(eip)
         if first_instruct[1].startswith('jmp'):
             retval = True
         elif first_instruct[1].startswith('add') and 'pc' in first_instruct[1]:
@@ -1720,7 +1726,7 @@ class StackTrace():
                 fun_of_ip = self.fun_mgr.getFunName(frame.ip)
                 frame.fun_of_ip = fun_of_ip
                 frame.fun_addr_of_ip = self.fun_mgr.getFun(frame.ip)
-                #self.lgr.debug('stackTrace addFrame set fun_of_ip to %s frame.ip 0x%x' % (fun_of_ip, frame.ip))
+                self.lgr.debug('stackTrace addFrame set fun_of_ip to %s frame.ip 0x%x' % (fun_of_ip, frame.ip))
 
                 if self.isCall(frame.instruct):
                     parts = frame.instruct.split()
@@ -1772,9 +1778,12 @@ class StackTrace():
                         self.lgr.debug('stackTrace addFrame vxworks fun_addr 0x%x not a fun, bail' % frame.fun_addr)
             if not skip_this:
                 # adjust is confusing because we adjust on the next frame.  consider ldp x1,x2, [sp], #36  before changing.
+                # how can we adjust on next, if we need adjust to find the next? eh?
                 if self.cpu.architecture in ['arm', 'arm64']:
-                    adjust = self.fun_mgr.stackAdjust(frame.fun_name)
-                    self.lgr.debug('stackTrace addFrame arm get adjust for fun %s got %d' % (frame.fun_name, adjust))
+                    #adjust = self.fun_mgr.stackAdjust(frame.fun_name)
+                    #self.lgr.debug('stackTrace addFrame arm get adjust for fun %s got %d' % (frame.fun_name, adjust))
+                    adjust = self.fun_mgr.stackAdjust(frame.fun_of_ip)
+                    self.lgr.debug('stackTrace addFrame get adjust for fun %s got %d ARM confusion, see addFrame' % (frame.fun_of_ip, adjust))
                 else:
                     adjust = self.fun_mgr.stackAdjust(frame.fun_of_ip)
                     self.lgr.debug('stackTrace addFrame get adjust for fun %s got %d' % (frame.fun_of_ip, adjust))
@@ -1843,7 +1852,7 @@ class StackTrace():
     def isJumpTable(self, call_to):
         retval = False
         ip = call_to
-        instruct = SIM_disassemble_address(self.cpu, ip, 1, 0)
+        instruct = self.disassemble(ip)
         self.lgr.debug('stackTrace isJumpTable ip 0x%x instruct %s' % (ip, instruct[1]))
         ip = ip + instruct[0]
         for i in range(5):
@@ -1854,7 +1863,7 @@ class StackTrace():
                     retval = True
                     break
             ip = ip + instruct[0]
-            instruct = SIM_disassemble_address(self.cpu, ip, 1, 0)
+            instruct = self.disassemble(ip)
         return retval
 
     def mindTheGap(self, ptr):
@@ -1940,4 +1949,5 @@ class StackTrace():
             #    self.lgr.debug('stackTrace okToCall prev_index none for prev fame %s' % self.frames[-1].fname)
         return retval
 
-
+    def disassemble(self, addr):
+        return self.top.disassembleAddress(self.cpu, addr, force=self.was_thumb)
