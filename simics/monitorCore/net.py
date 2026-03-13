@@ -1,6 +1,7 @@
 import pickle
 import os
 import resimUtils
+from simics import *
 SOCKET      =1 
 BIND        =2
 CONNECT     =3
@@ -140,10 +141,12 @@ class SockAddrNL():
 
 class SockStruct():
     def __init__(self, cpu, params, mem_utils, fd=None, length=0, sock_type=None, lgr=None):
+        # get socket info from a socketcall, or if fd is given, then params will be address
+        # of the socketet structure.
         self.length = length
         self.flags = 0
         if fd is None:
-            ''' must be 32-bit socketcall, find addr.  fd, length and flags are speculative '''
+            # must be 32-bit socketcall, find addr.  fd, length and flags are speculative '''
             self.fd = mem_utils.readWord32(cpu, params)
             self.length = mem_utils.readWord32(cpu, params+8)
             self.flags = mem_utils.readWord32(cpu, params+12)
@@ -300,13 +303,24 @@ class Msghdr():
         iov_size = 2*self.word_size
         if self.msg_iov is not None:
             iov_addr = self.msg_iov
-            self.lgr.debug('MsgHdr getIovlen , mes_iovlen is %d' % self.msg_iovlen)
+            self.lgr.debug('MsgHdr getIovec , mes_iovlen is %d msg_iov 0x%x word_size %d' % (self.msg_iovlen, self.msg_iov, self.word_size))
             limit = min(10, self.msg_iovlen)
             for i in range(limit):
                 base = self.mem_utils.readAppPtr(self.cpu, iov_addr, size=self.word_size)
-                length = self.mem_utils.readAppPtr(self.cpu, iov_addr+self.mem_utils.wordSize(self.cpu))
+                length = self.mem_utils.readAppPtr(self.cpu, iov_addr+self.word_size, size=self.word_size)
+                #self.lgr.debug('MsgHdr getIovec iov_addr: 0x%x read base 0x%x length 0x%x' % (iov_addr, base, length))
                 retval.append(Iovec(base, length)) 
                 iov_addr = iov_addr+iov_size
+        return retval
+
+    def getMsgName(self):
+        retval = None
+        if self.msg_name is not None and self.msg_namelen > 0:
+            if self.msg_namelen > 200:
+                self.lgr.error('net Msghdr getMsgName msg_namelen seems large %d' % self.msg_namelen)
+                retval = 'name len too big???'
+            else:
+                retval = self.mem_utils.readBytes(self.cpu, self.msg_name, self.msg_namelen)
         return retval
 
     def getString(self):
@@ -320,6 +334,9 @@ class Msghdr():
                     retval = 'msg_name BROKEN addr 0x%x  msg_namelen: %d  msg_name: %s msg_iov: 0x%x  msg_iovlen: %d  msg_control: 0x%x msg_controllen %d flags 0x%x' % (self.msg_name,
                     self.msg_namelen, msg_name, self.msg_iov, self.msg_iovlen, self.msg_control, self.msg_controllen, self.flags)
                     return retval
+                elif self.msg_namelen == 16:
+                    name_sock_struct = SockStruct(self.cpu, self.msg_name, self.mem_utils, fd=-1)
+                    msg_name = name_sock_struct.getString()
                 else:
                     msg_name = self.mem_utils.readBytes(self.cpu, self.msg_name, self.msg_namelen).hex()
             retval = 'msg_name addr 0x%x  msg_namelen: %d  msg_name: %s msg_iov: 0x%x  msg_iovlen: %d  msg_control: 0x%x msg_controllen %d flags 0x%x' % (self.msg_name,
@@ -408,3 +425,4 @@ class Msghdr():
                 index = end
                 if index >= len(the_bytes):
                     break
+
