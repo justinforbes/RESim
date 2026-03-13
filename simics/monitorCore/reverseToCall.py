@@ -1377,7 +1377,7 @@ class reverseToCall():
             elif (self.first_back and not self.uncall) and (not self.isRet(instruct[1], eip) or self.step_into):
                 self.lgr.debug('stoppedReverseToCall first back not a ret or step_into at %x, we are done' % eip)
                 self.cleanup(None)
-            elif self.decode.isCall(self.cpu, instruct[1]):
+            elif self.decode.isCall(instruct[1]):
                 self.got_calls += 1
                 if self.got_calls == self.need_calls:
                     self.lgr.debug('stoppedReverseToCall %s at %x we must be done' % (instruct[1], eip))
@@ -1590,7 +1590,7 @@ class reverseToCall():
             eip = return_to - 4
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             self.lgr.debug('findCallBehind instruct is %s' % instruct[1])
-            if self.decode.isCall(self.cpu, instruct[1], ignore_flags=True):
+            if self.decode.isCall(instruct[1]):
                 self.lgr.debug('followCall arm or ppceip 0x%x' % eip)
                 retval = eip
         else:

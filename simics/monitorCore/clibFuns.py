@@ -171,6 +171,9 @@ def adjustFunName(fun_name, fun_mgr, lgr):
             elif fun.startswith('Z') and 'QString' in fun:
                 fun = 'QString'
 
+            elif fun.startswith('g_ascii_'):
+                fun = fun[len('g_ascii_'):]
+
             ''' TBD clean up this hack?'''
             if fun.endswith('destroy') or 'destructor' in fun:
                 #lgr.debug('is destroy')

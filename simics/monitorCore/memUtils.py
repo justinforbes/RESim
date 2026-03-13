@@ -130,6 +130,28 @@ def getCPL(cpu):
         mask = 3
     return cs & mask
 
+def isThumb(cpu):
+    retval = False
+    reg_num = cpu.iface.int_register.get_number('cpsr')
+    if reg_num is not None:
+        reg_value = cpu.iface.int_register.read(reg_num)
+        retval = testBit(reg_value, 5)
+    return retval
+
+def setThumb(cpu):
+    reg_num = cpu.iface.int_register.get_number('cpsr')
+    if reg_num is not None:
+        reg_value = cpu.iface.int_register.read(reg_num)
+        new_value = setBit(reg_value, 5)
+        cpu.iface.int_register.write(reg_num, new_value)
+
+def clearThumb(cpu):
+    reg_num = cpu.iface.int_register.get_number('cpsr')
+    if reg_num is not None:
+        reg_value = cpu.iface.int_register.read(reg_num)
+        new_value = clearBit(reg_value, 5)
+        cpu.iface.int_register.write(reg_num, new_value)
+
 def testBit(int_value, bit):
     mask = 1 << bit
     result = int_value & mask

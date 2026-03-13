@@ -126,6 +126,7 @@ class Disassemble():
     def getProgBytes(self, addr):
         fname, load_addr, end = self.so_map.getSOInfo(addr)
         if fname is not None:
+            #self.lgr.debug('disassemble getProgBytes addr 0x%x is fname %s call getLoadOffset' % (addr, fname))
             load_offset = self.so_map.getLoadOffset(fname)
             if fname is not None:
                 #self.lgr.debug('disassemble getProgBytes addr 0x%x is fname %s load_addr 0x%x, load_offset 0x%x' % (addr, fname, load_addr, load_offset))
@@ -139,7 +140,7 @@ class Disassemble():
             self.lgr.debug('disassemble getProgBytes got no fname for addr 0x%x' % addr)
         return fname, load_addr, end 
 
-    def getDisassemble(self, addr):
+    def getDisassemble(self, addr, force=False):
         ''' NOT right for windows '''
         retval = None
         if self.so_map.wordSize() == 4:
@@ -147,12 +148,23 @@ class Disassemble():
         else:
             md = self.md64
         instruct = SIM_disassemble_address(self.cpu, addr, 1, 0)
-        if md is not None and 'illegal memory mapping' in instruct[1]:
+        if force or (md is not None and 'illegal memory mapping' in instruct[1]):
+            #if 'illegal memory mapping' in instruct[1]:
+            #    self.lgr.debug('disassemble getDisassemble 0x%x is not mapped' % addr)
+            #else:
+            #    self.lgr.debug('disassemble getDisassemble force for addr 0x%x' % addr)
             fname, load_addr, end = self.getProgBytes(addr)
-            delta = addr - load_addr
-            for (address, size, mnemonic, op_str) in md.disasm_lite(self.prog_bytes[fname][delta:], addr, count=1):
-                self.lgr.debug("disassemble getDisassemble 0x%x:\t%s\t%s" %(address, mnemonic, op_str))
-                retval = (size, mnemonic+' '+op_str)
+            if load_addr is not None:
+                delta = addr - load_addr
+                for (address, size, mnemonic, op_str) in md.disasm_lite(self.prog_bytes[fname][delta:], addr, count=1):
+                    #self.lgr.debug("disassemble getDisassemble found 0x%x:\t%s\t%s" %(address, mnemonic, op_str))
+                    retval = (size, mnemonic+' '+op_str)
+                if retval is None:
+                    # no better plan, avoids None
+                    retval = instruct
+            else:
+                self.lgr.debug('disassemble getDisassemble load_arr is None for addr 0x%x' % addr)
+                retval = instruct
         else:
             retval = instruct
         return retval

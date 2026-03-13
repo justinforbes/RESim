@@ -316,6 +316,7 @@ class SharedSyscall():
         return eip
 
     def doSockets(self, exit_info, eax, tid, comm):
+        word_size = self.mem_utils.wordSize(self.cpu, cpl=3)
         if exit_info.callnum == self.task_utils.syscallNumber('socketcall', exit_info.compat32):
             socket_callname = exit_info.socket_callname
             socket_syscall = self.top.getSyscall(self.cell_name, 'socketcall')
@@ -619,7 +620,7 @@ class SharedSyscall():
                     ''' in case we want to break on a read of this data. ''' 
                     self.lgr.debug('sharedSyscall recvmsg call checkCount')
                     if not self.checkCount(eax, exit_info, trace_msg, s):
-                        iov_size = 2*self.mem_utils.WORD_SIZE
+                        iov_size = 2*word_size
                         iov_addr = msghdr.msg_iov
                         limit = min(10, msghdr.msg_iovlen)
                         remain = eax 
@@ -627,9 +628,9 @@ class SharedSyscall():
                         if self.kbuffer is not None:
                             self.kbuffer.readReturn(eax)
                         for i in range(limit):
-                            base = self.mem_utils.readPtr(self.cpu, iov_addr)
-                            length = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
-                            if length < 0xffff:
+                            base = self.mem_utils.readAppPtr(self.cpu, iov_addr, size=word_size)
+                            length = self.mem_utils.readAppPtr(self.cpu, iov_addr+word_size, size=word_size)
+                            if length < 0xffff or (i == limit-1):
                                 if remain > length:
                                     data_len = length
                                 else:
@@ -642,11 +643,11 @@ class SharedSyscall():
                                     exit_info.count = data_len
                                 self.lgr.debug('dataWatch recvmsg setRange base 0x%x len %d' % (base, data_len))
                                 if data_len > 0:
+                                    self.lgr.debug('recvmsg set call dataWatch base 0x%x data_len 0x%x' % (base, data_len))
                                     self.dataWatch.setRange(base, data_len, msg=trace_msg, max_len=length, fd=exit_info.old_fd, data_stream=True, kbuffer=self.kbuffer)
                             else:
                                 self.lgr.debug('dataWatch recvmsg length too large BROKEN')
                                 break
-                        self.lgr.debug('recvmsg set dataWatch')
                         if my_syscall.linger: 
                             self.dataWatch.stopWatch() 
                             self.dataWatch.watch(break_simulation=False, i_am_alone=True)
@@ -658,6 +659,9 @@ class SharedSyscall():
                             SIM_run_alone(self.stopAlone, None)
                 for call_param in exit_info.call_params:
                     self.checkStringMatch(call_param, exit_info, byte_array, socket_callname, tid)
+                if msghdr.msg_name is not None and msghdr.msg_namelen <= 200:
+                    self.dataWatch.setRange(msghdr.msg_name, msghdr.msg_namelen, msg='msg_name', kbuffer=self.kbuffer)
+                  
             else:
                 self.lgr.debug('sharedSyscall recvmsg no msghdr, assume return from syscall we already handled')
                 exit_info.matched_param = None
@@ -761,6 +765,7 @@ class SharedSyscall():
            Includes parameter checking to see if the call meets criteria given in
            a paramter buried in exit_info (see ExitInfo class).
         '''
+        word_size = self.mem_utils.wordSize(self.cpu, cpl=3)
         #self.lgr.debug('sharedSyscall handleExit') 
         trace_msg = ''
         if tid == '0':
@@ -804,7 +809,7 @@ class SharedSyscall():
         if instruct[1].startswith('iret'):
             reg_num = self.cpu.iface.int_register.get_number(self.mem_utils.getESP())
             esp = self.cpu.iface.int_register.read(reg_num)
-            ret_addr = self.mem_utils.readPtr(self.cpu, esp)
+            ret_addr = self.mem_utils.readAppPtr(self.cpu, esp, size=word_size)
             if ret_addr > self.param.kernel_base:
                 ''' nested '''
                 #self.lgr.debug('sharedSyscall cell %s exitHap nested' % (self.cell_name))
@@ -1165,7 +1170,7 @@ class SharedSyscall():
       
         elif callname in ['_llseek', 'lseek']:
             if eax >= 0:
-                if callname == '_llseek' and self.mem_utils.WORD_SIZE == 4:
+                if callname == '_llseek' and word_size == 4:
                     result = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr)
                     if result is not None:
                         trace_msg = trace_msg+('FD: %d result: 0x%x\n' % (exit_info.old_fd, result))
@@ -1207,8 +1212,8 @@ class SharedSyscall():
             
                 elif exit_info.cmd == 0x720:
                     ''' i2c bus xfer '''
-                    xfer_byte_addr = exit_info.retval_addr+2*self.mem_utils.WORD_SIZE
-                    result_ptr = self.mem_utils.readPtr(self.cpu, xfer_byte_addr)
+                    xfer_byte_addr = exit_info.retval_addr+2*word_size
+                    result_ptr = self.mem_utils.readAppPtr(self.cpu, xfer_byte_addr, size=word_size)
                     result = self.mem_utils.readByte(self.cpu, result_ptr)
                     if result is not None:
                         trace_msg = trace_msg+('FD: %d cmd: 0x%x retval_addr: 0x%x result: 0x%x written to 0x%x\n' % (exit_info.old_fd, exit_info.cmd, exit_info.retval_addr, result, result_ptr))
@@ -1373,7 +1378,7 @@ class SharedSyscall():
                 #SIM_break_simulation('msgget tid:%s ueax 0x%x eax 0x%x' % (tid, ueax, eax))
             elif call == ipc.SHMAT:
                 ret_addr = exit_info.frame['param4']
-                mem_addr = self.mem_utils.readPtr(self.cpu, ret_addr)
+                mem_addr = self.mem_utils.readAppPtr(self.cpu, ret_addr, size=word_size)
                 trace_msg = trace_msg+(' mem_addr: 0x%x\n' % (mem_addr)) 
             elif eax < 0:
                     trace_msg = trace_msg+('result: %d\n' % (eax)) 
@@ -1388,7 +1393,7 @@ class SharedSyscall():
                 #SIM_break_simulation('return MSGSND')    
             elif call == ipc.MSGRCV:
                 nbytes = min(eax, 1024)
-                msg_ptr = self.mem_utils.readPtr(self.cpu, exit_info.retval_addr)
+                msg_ptr = self.mem_utils.readAppPtr(self.cpu, exit_info.retval_addr, size=word_size)
                 byte_array = self.mem_utils.getBytes(self.cpu, eax, msg_ptr)
                 #self.lgr.debug('MSGRCV retval_addr 0x%x got %d bytes, nbytes is %d' % (exit_info.retval_addr, len(byte_array), nbytes))
                 if byte_array is not None:
@@ -1474,7 +1479,7 @@ class SharedSyscall():
                          match_fd = epoll_info.findFD(events)
                          if match_fd is not None:
                              trace_msg = trace_msg + 'FD: %d' % match_fd 
-                     cur_ptr = cur_ptr+4+self.mem_utils.WORD_SIZE+12
+                     cur_ptr = cur_ptr+4+word_size+12
              else:
                  trace_msg = trace_msg+' no epoll wait value\n'
              trace_msg = trace_msg+'\n'
@@ -1748,9 +1753,10 @@ class SharedSyscall():
             self.byte_array = byte_array
 
     def getIOV(self, count, exit_info):
+        word_size = self.mem_utils.wordSize(self.cpu, cpl=3)
        
         limit = min(10, exit_info.count)
-        iov_size = 2*self.mem_utils.WORD_SIZE
+        iov_size = 2*word_size
         iov_addr = exit_info.retval_addr
         remain = count 
         self.lgr.debug('sharedSyscall getIOV call %s return count %d iov_addr 0x%x' % (exit_info.callname, count, iov_addr))
@@ -1758,10 +1764,10 @@ class SharedSyscall():
         full_byte_tuple = ()
         iov_set = []
         for i in range(limit):
-            base = self.mem_utils.readPtr(self.cpu, iov_addr)
+            base = self.mem_utils.readAppPtr(self.cpu, iov_addr, size=word_size)
             if base == 0:
                 continue
-            length = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
+            length = self.mem_utils.readAppPtr(self.cpu, iov_addr+word_size, size=word_size)
             if remain > length:
                 data_len = length
             else:
