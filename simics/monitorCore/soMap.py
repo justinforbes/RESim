@@ -953,17 +953,81 @@ class SOMap():
                 length = load_info.size
                 end = load_info.end
                 if skip is None or not (skip >= start and skip <= end):
-                    proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, start, length, 0)
+                    proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, start, length, 0)
                     self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.knownHap, cur_tid, proc_break, 'runToKnown'))
+                    self.lgr.debug('soMap runToKnow lib %s 0x%x 0x%x' % (self.so_file_map[map_tid][load_info], start, length))
                 else:
                     self.lgr.debug('soMap runToKnow, skip %s' % (self.so_file_map[map_tid][load_info]))
-                #self.lgr.debug('soMap runToKnow lib %s 0x%x 0x%x' % (self.so_file_map[map_tid][text_seg], start, length))
        else:
            self.lgr.debug('soMap runToKnown no so_file_map for %s' % map_tid)
        if len(self.hap_list) > 0:  
            return True
        else:
            return False
+
+    def revToKnown(self, skip, no_libc=False):
+       # return True if we set a breakpoint and are reversing
+       cpu, comm, cur_tid = self.task_utils.curThread() 
+       map_tid = self.getSOTid(cur_tid)
+       break_list = []
+       if map_tid in self.prog_start: 
+           start =  self.prog_start[map_tid] 
+           length = self.prog_end[map_tid] - self.prog_start[map_tid] 
+           proc_bp = SIM_breakpoint(cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, start, length, 0)
+           break_list.append(proc_bp)
+           self.lgr.debug('soMap revToKnow text 0x%x 0x%x' % (start, length))
+       else:
+           self.lgr.debug('soMap revToKnown no text for %s' % map_tid)
+       if map_tid in self.so_file_map:
+            for load_info in self.so_file_map[map_tid]:
+                start = load_info.addr
+                length = load_info.size
+                end = load_info.end
+                fname = self.so_file_map[map_tid][load_info]
+                if no_libc and 'libc.so' in fname:
+                    self.lgr.debug('soMap revToKnow skip libc %s' % (fname))
+                elif skip is None or not (skip >= start and skip <= end):
+                    proc_bp = SIM_breakpoint(cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, start, length, 0)
+                    break_list.append(proc_bp)
+                    self.lgr.debug('soMap revToKnow lib %s 0x%x 0x%x' % (fname, start, length))
+                else:
+                    self.lgr.debug('soMap revToKnow, skip %s' % (self.so_file_map[map_tid][load_info]))
+       else:
+           self.lgr.debug('soMap revToKnown no so_file_map for %s' % map_tid)
+       if len(break_list) > 0:  
+           self.top.revToWhatever(break_list, self.didRevToKnown, tid=cur_tid)
+           return True
+       else:
+           return False
+
+    def revToSO(self, lib):
+       # return True if we set a breakpoint and are reversing
+       self.lgr.debug('soMap revToSo %s' % lib)
+       cpu, comm, cur_tid = self.task_utils.curThread() 
+       map_tid = self.getSOTid(cur_tid)
+       break_list = []
+       if map_tid in self.so_file_map:
+            for load_info in self.so_file_map[map_tid]:
+                fname = self.so_file_map[map_tid][load_info]
+                if lib in fname:
+                    start = load_info.addr
+                    length = load_info.size
+                    end = load_info.end
+                    proc_bp = SIM_breakpoint(cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, start, length, 0)
+                    break_list.append(proc_bp)
+                    self.lgr.debug('soMap revToSO lib %s set breaks 0x%x 0x%x' % (fname, start, length))
+       else:
+           self.lgr.debug('soMap revToSO no so_file_map for %s' % map_tid)
+       if len(break_list) > 0:  
+           self.top.revToWhatever(break_list, self.didRevToKnown, tid=cur_tid)
+           return True
+       else:
+           self.lgr.debug('soMap revToSO, lib %s not in so map?' % lib)
+           return False
+
+    def didRevToKnown(self):
+        self.lgr.debug('didRevToKnown')
+        print('at some so?')
 
     def wordSize(self, tid=None):
        # TBD why take tid as param?  Because may be multiple processes/objects of different sizes
@@ -1016,7 +1080,7 @@ class SOMap():
                 if os.path.basename(self.so_file_map[map_tid][load_info]) == os.path.basename(prog):
                     retval = load_info.addr
                     ret_size = load_info.size
-                    self.lgr.debug('soMap got match for %s address 0x%x tid:%s' % (prog, retval, tid))
+                    #self.lgr.debug('soMap got match for %s address 0x%x tid:%s' % (prog, retval, tid))
                     break 
 
         if retval is None and map_tid in self.text_prog:
@@ -1047,7 +1111,8 @@ class SOMap():
         if prog in self.prog_info:
             tid_list = self.task_utils.getTidsForComm(in_fname)
             if len(tid_list) == 0 and not is_so:
-                self.lgr.debug('soMap getImageBase has prog %s in prog_info, but no program running.  Do not mislead' %prog)
+                #self.lgr.debug('soMap getImageBase has prog %s in prog_info, but no program running.  Do not mislead' %prog)
+                pass
             else:
                 if self.prog_info[prog].text_start == 0:
                     retval = 0
@@ -1177,15 +1242,15 @@ class SOMap():
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
         tid = self.getSOTid(tid)
-        if tid in self.text_prog:
-            self.lgr.debug('soMap getLoadOffset tid is %s len prog_start %d prog_in %s prog %s text_prog %s' % (tid, len(self.prog_start), prog_in, prog, self.text_prog[tid]))
-        else:
-            self.lgr.debug('soMap getLoadOffset tid is %s not in text_prog' % (tid))
-        if tid in self.prog_start:
-           self.lgr.debug('tid %s in prog_start and text_prog[tid] is %s' % (tid, self.text_prog[tid]))
-           
-        else:
-           self.lgr.debug('tid %s not in prog_start' % tid)
+        #if tid in self.text_prog:
+        #    self.lgr.debug('soMap getLoadOffset tid is %s len prog_start %d prog_in %s prog %s text_prog %s' % (tid, len(self.prog_start), prog_in, prog, self.text_prog[tid]))
+        #else:
+        #    self.lgr.debug('soMap getLoadOffset tid is %s not in text_prog' % (tid))
+        #if tid in self.prog_start:
+        #   self.lgr.debug('soMap getLoadOffset tid %s in prog_start and text_prog[tid] is %s' % (tid, self.text_prog[tid]))
+        #   
+        #else:
+        #   self.lgr.debug('soMap getLoadOffset tid %s not in prog_start' % tid)
         maybe_image_base = self.getImageBase(prog_in)
         maybe_load_addr = self.getLoadAddr(prog_in)
         if tid in self.text_prog and tid in self.prog_start and self.text_prog[tid] == prog_in:
@@ -1202,9 +1267,9 @@ class SOMap():
                 self.lgr.error('soMap getLoadOffset prog %s not in prog_info' % prog)
         elif maybe_image_base is not None and maybe_load_addr is not None:
             retval = maybe_load_addr - maybe_image_base
-            self.lgr.debug('soMap getLoadOffset using image_base from getImageBase got retval 0x%x' % retval)
+            #self.lgr.debug('soMap getLoadOffset using image_base from getImageBase got retval 0x%x' % retval)
         else:
-            self.lgr.debug('soMap getLoadOffset tid %s not somewhere, use getLoadAddr? ' % (tid))
+            #self.lgr.debug('soMap getLoadOffset tid %s not somewhere, use getLoadAddr? ' % (tid))
             #if tid in self.text_prog:
             #    self.lgr.debug('soMap getLoadOffset text_prog[%s] is %s and prog_in is %s' % (tid, self.text_prog[tid], prog_in))
             retval = self.getLoadAddr(prog, tid)

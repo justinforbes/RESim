@@ -771,6 +771,7 @@ class GenMonitor():
                 hc.hap = None
 
         for bp in stop_action.breakpoints:
+            self.lgr.debug('genMonitor stopHap stopAction delete breakpoint %d' % bp)
             RES_delete_breakpoint(bp)
         del stop_action.breakpoints[:]
 
@@ -795,6 +796,14 @@ class GenMonitor():
         else:
             self.lgr.debug('genMonitor stopHap enable-vmp')
             SIM_run_command('enable-vmp')
+
+    def revToWhatever(self, breakpoints, callback, tid=None):
+        cpu, comm, cur_tid = self.task_utils[self.target].curThread() 
+        hap_clean = hapCleaner.HapCleaner(cpu)
+        stop_action = hapCleaner.StopAction(hap_clean, breakpoints=breakpoints, tid=tid, prelude=callback)
+        self.stop_hap = self.RES_add_stop_callback(self.stopHap, stop_action)
+        self.lgr.debug('revToWhatever, now reverse')
+        SIM_run_command('rev')
 
     def revToTid(self, tid):
         cpu, comm, cur_tid = self.task_utils[self.target].curThread() 
@@ -1613,7 +1622,7 @@ class GenMonitor():
 
                     else:
                         python_path = resimUtils.getPyPath(self.full_path)
-                        if os.path.basename(python_path) == 'python':
+                        if python_path is not None and os.path.basename(python_path) == 'python':
                             pylib = 'libpython'
                             libpython = self.soMap[self.target].findSOPath(pylib)
                             self.lgr.debug('debug, is python path %s libpython %s' % (python_path, libpython))
@@ -5213,11 +5222,29 @@ class GenMonitor():
 
         if self.isWindows():
             self.lgr.debug('runToOther eip 0x%x' % eip)
-            self.run_to[self.target].runToKnown(threads=threads)
+            self.run_to[self.target].runToKnown(threads=threads, skip=eip)
         else:
-            self.soMap[self.target].runToKnown(eip, threads=threads)
+            self.soMap[self.target].runToKnown(skip=eip, threads=threads)
         if go:
            SIM_continue(0)
+
+    def revToOther(self, no_libc=False):
+        ''' Reverse execution until a different library is entered, or main text is returned to '''
+        cpu = self.cell_config.cpuFromCell(self.target)
+        eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
+
+        if self.isWindows():
+            self.lgr.error('revToOther not yet on windows')
+        else:
+            self.soMap[self.target].revToKnown(eip, no_libc=no_libc)
+
+    def revToSO(self, lib):
+        ''' Reverse execution until a named library is entered '''
+
+        if self.isWindows():
+            self.lgr.error('revToSO not yet on windows')
+        else:
+            self.soMap[self.target].revToSO(lib)
 
     def modFunction(self, fun, offset, word):
         ''' write a given word at the offset of a start of a function.  Intended to force a return
@@ -5266,8 +5293,12 @@ class GenMonitor():
         print('current task cr3 0x%x' % (task_cr3))
         if use_cr3 is not None:
             print('Using cr3 0x%x' % (use_cr3))
-
-        ptable_info = pageUtils.findPageTable(cpu, addr, self.lgr, force_cr3=use_cr3)
+     
+        if addr < self.mem_utils[self.target].getUnsigned(self.param[self.target].kernel_base):
+            kernel = False
+        else:
+            kernel = True
+        ptable_info = pageUtils.findPageTable(cpu, addr, self.lgr, force_cr3=use_cr3, kernel=kernel, do_log=True)
         if not quiet:
             print(ptable_info.valueString())
         cpu = self.cell_config.cpuFromCell(self.target)
@@ -5896,8 +5927,8 @@ class GenMonitor():
     def getFullPath(self, fname=None):
         # get the full local path.
         if fname is not None:
-            retval = self.targetFS[self.target].getFull(fname, lgr=self.lgr)
-            self.lgr.debug('getFullPath from targetFS got %s' % retval)
+            retval = self.targetFS[self.target].getFull(fname, lgr=None)
+            #self.lgr.debug('getFullPath from targetFS got %s' % retval)
         else:
             retval =  self.full_path
         return retval 
@@ -6757,6 +6788,7 @@ class GenMonitor():
         if self.target in self.magic_origin:
             self.magic_origin[self.target].deleteMagicHap() 
         resimSimicsUtils.cutRealWorld()
+        self.resetOrigin()
 
     def runTo32(self):
         self.run_to[self.target].runTo32()
@@ -7044,9 +7076,14 @@ class GenMonitor():
     def getSyscallManager(self):
         return self.syscallManager[self.target]
 
-    def disassembleAddress(self, cpu, addr):
+    def disassemble(self, addr, force=False, cpu=None):
+        if cpu is None:
+            cpu = self.cell_config.cpuFromCell(self.target)
+        return self.disassembleAddress(cpu, addr, force=force)
+
+    def disassembleAddress(self, cpu, addr, force=False):
         target = self.cell_config.cellFromCPU(cpu)
-        return self.disassemble_instruct[target].getDisassemble(addr)
+        return self.disassemble_instruct[target].getDisassemble(addr, force=force)
 
     def traceFuns(self):
         self.fun_mgr.traceFuns()
@@ -7255,7 +7292,7 @@ class GenMonitor():
         eip = self.getEIP()
         instruct = SIM_disassemble_address(cpu, eip, 1, 0)
         self.lgr.debug('stepOver from 0x%x %s' % (eip, instruct[1]))
-        if decoder.isCall(cpu, instruct[1]): 
+        if decoder.isCall(instruct[1]): 
             next_eip = eip + instruct[0]
             self.doBreak(next_eip)
             SIM_continue(0)
