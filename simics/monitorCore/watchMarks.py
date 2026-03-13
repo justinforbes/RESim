@@ -335,6 +335,15 @@ class InetNtopMark():
     def getMsg(self):
         return self.msg
 
+class InetPtonMark():
+    def __init__(self, src, dest):
+        self.src = src    
+        self.dest = dest    
+        self.msg = 'inet_pton src: 0x%x dest: 0x%x' % (src, dest)
+
+    def getMsg(self):
+        return self.msg
+
 class LenMark():
     def __init__(self, src, count):
         self.src = src    
@@ -1285,6 +1294,11 @@ class WatchMarks():
         wm = self.addWatchMark(xm)
         return wm
 
+    def inet_pton(self, src, dest):
+        xm = InetPtonMark(src, dest)
+        self.lgr.debug('watchMarks inet_pton %s' % (xm.getMsg()))
+        wm = self.addWatchMark(xm)
+        return wm
     def xmlGetProp(self, src, count, the_string, dest):
         result = 'Not found'
         if dest != 0:
