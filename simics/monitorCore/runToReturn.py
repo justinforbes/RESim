@@ -55,12 +55,17 @@ class RunToReturn():
         call_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, 0, self.kernel_base, 0, prefix=prefix)
         self.call_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.callHap, None, call_break, 'run_to_return_call')
 
-        if self.cpu.architecture == 'ppc32':
-            prefix = 'blr'
+        if self.cpu.architecture.startswith('arm'):
+            ret_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, 0, self.kernel_base, 0, prefix='ret')
+            ret_break2 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, 0, self.kernel_base, 0, prefix='bx lr')
+            self.ret_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.retHap, None, ret_break1, ret_break2, 'run_to_return_ret')
         else:
-            prefix = 'ret'
-        ret_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, 0, self.kernel_base, 0, prefix=prefix)
-        self.ret_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.retHap, None, ret_break, 'run_to_return_ret')
+            if self.cpu.architecture == 'ppc32':
+                prefix = 'blr'
+            else:
+                prefix = 'ret'
+            ret_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, 0, self.kernel_base, 0, prefix=prefix)
+            self.ret_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.retHap, None, ret_break, 'run_to_return_ret')
 
 
     def callHap(self, dumb, context, break_num, memory):
@@ -72,6 +77,7 @@ class RunToReturn():
         eip = self.top.getEIP()
         sp = self.top.getReg('sp', self.cpu)
         instruct = self.top.disassembleAddress(self.cpu, eip)
+        self.lgr.debug('RunToReturn callHap instruct %s calls: %d  returns: %d' % (instruct[1], self.call_count, self.ret_count))
         if instruct[1].startswith('blr'):
             self.lgr.debug('RunToReturn callHap ppc32 BLR, so really a retHap handled elsewhere, skip') 
             #self.lgr.debug('RunToReturn callHap hacked BLR, so really a retHap calls:%d rets:%d  sp: 0x%x eip: 0x%x' % (self.call_count, self.ret_count, sp, eip))
@@ -80,7 +86,7 @@ class RunToReturn():
             #    SIM_run_alone(self.rmHaps, None)
             #    self.top.stopAndGo(self.stepOne)
         
-        elif not instruct[1].startswith('blt') and not instruct[1].startswith('ble'):
+        elif not instruct[1].startswith('blt') and not instruct[1].startswith('ble') and not instruct[1].startswith('bls'):
             self.call_count = self.call_count+1
             if instruct[1].startswith('bl '):
                 call_addr_s = instruct[1].split()[1]
@@ -93,7 +99,7 @@ class RunToReturn():
                     call_fun = self.top.getFunName(call_addr)
                     call_from_fun = self.top.getFunName(eip)
                     if call_fun is None and call_from_fun is None:
-                        self.lgr.debug('RunToReturn eip: 0x%x call none from none, hack it down' % eip)
+                        self.lgr.debug('RunToReturn callHap eip: 0x%x call none from none, hack it down' % eip)
                         self.call_count = self.call_count - 1
                     else:
                         self.lgr.debug('RunToReturn callHap calls now:%d rets:%d eip: 0x%x %s call_fun %s from %s' % (self.call_count, self.ret_count, eip, instruct[1], call_fun, call_from_fun))
@@ -108,7 +114,7 @@ class RunToReturn():
         eip = self.top.getEIP()
         instruct = self.top.disassembleAddress(self.cpu, eip)
         self.ret_count = self.ret_count+1
-        if instruct[1].startswith('blr'):
+        if instruct[1].startswith('blr') or instruct[1] == 'bx lr':
             lr = self.top.getReg('lr', self.cpu)
             lr_fun = self.top.getFunName(lr)
             call_from_fun = self.top.getFunName(eip)
