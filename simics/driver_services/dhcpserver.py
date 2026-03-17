@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+import argparse
+import ipaddress
+import random
+from scapy.all import *
+
+# This dictionary will hold our network configuration.
+dhcp_config = {}
+
+def handle_dhcp_packet(packet):
+    """
+    Handles incoming DHCP packets (Discover and Request).
+    """
+    if not DHCP in packet or not packet[BOOTP].chaddr:
+        return
+
+    # Client's MAC address
+    client_mac = packet[BOOTP].chaddr
+
+    # Handle DHCP Discover
+    if packet[DHCP].options[0][1] == 1:
+        print(f"--- DHCP Discover from {pretty_mac(client_mac)} ---")
+
+        # Craft DHCP Offer
+        dhcp_offer = (
+            #Ether(src=get_if_hwaddr(conf.iface), dst="ff:ff:ff:ff:ff:ff") /
+            Ether(src=get_if_hwaddr(conf.iface), dst=pretty_mac(client_mac)) /
+            IP(src=dhcp_config["server_ip"], dst=dhcp_config["offer_ip"]) /
+            UDP(sport=67, dport=68) /
+            BOOTP(
+                op=2, # BOOTREPLY
+                yiaddr=dhcp_config["offer_ip"],
+                siaddr=dhcp_config["server_ip"],
+                chaddr=client_mac,
+                xid=random.randint(0, 0xFFFFFFFF)
+            ) /
+            DHCP(options=[
+                ("message-type", "offer"),
+                ("subnet_mask", dhcp_config["subnet_mask"]),
+                ("router", dhcp_config["server_ip"]),
+                ("name_server", "8.8.8.8"),
+                ("lease_time", 172800), # 2 days
+                ("sname", "dhcp_driver.sn"),
+                ("hostname", "dhcp0"), 
+                ("domainname", "network.sim"), 
+                "end"
+            ])
+        )
+
+        print(f"--- Sending DHCP Offer of {dhcp_config['offer_ip']} ---")
+        sendp(dhcp_offer, iface=conf.iface, verbose=0)
+
+    # Handle DHCP Request
+    elif packet[DHCP].options[0][1] == 3:
+        print(f"--- DHCP Request from {pretty_mac(client_mac)} ---")
+
+        # Craft DHCP ACK
+        dhcp_ack = (
+            #Ether(src=get_if_hwaddr(conf.iface), dst="ff:ff:ff:ff:ff:ff") /
+            Ether(src=get_if_hwaddr(conf.iface), dst=pretty_mac(client_mac)) /
+            IP(src=dhcp_config["server_ip"], dst=dhcp_config["offer_ip"]) /
+            UDP(sport=67, dport=68) /
+            BOOTP(
+                op=2, # BOOTREPLY
+                yiaddr=dhcp_config["offer_ip"],
+                siaddr=dhcp_config["server_ip"],
+                chaddr=client_mac
+            ) /
+            DHCP(options=[
+                ("message-type", "ack"),
+                ("subnet_mask", dhcp_config["subnet_mask"]),
+                ("router", dhcp_config["server_ip"]),
+                ("name_server", "8.8.8.8"),
+                ("lease_time", 172800), # 2 days
+                "end"
+            ])
+        )
+
+        print(f"--- Sending DHCP ACK for {dhcp_config['offer_ip']} ---")
+        sendp(dhcp_ack, iface=conf.iface, verbose=0)
+
+def pretty_mac(mac_bytes):
+    """Converts a byte-string MAC to a human-readable string."""
+    return ":".join(f"{b:02x}" for b in mac_bytes)[:17]
+
+def dhcp_server():
+    """
+    Starts the DHCP server and begins sniffing for packets.
+    """
+    print("Starting DHCP server...")
+    print(f"Server IP: {dhcp_config['server_ip']}")
+    print(f"Offering IP: {dhcp_config['offer_ip']}")
+    print(f"Subnet Mask: {dhcp_config['subnet_mask']}")
+    print(f"Broadcast IP: {dhcp_config['broadcast_ip']}")
+    
+    sniff(filter="udp and (port 67 or port 68)", prn=handle_dhcp_packet, store=0)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Simple Python DHCP Server")
+    parser.add_argument(
+        "--subnet",
+        required=True,
+        type=str,
+        help="The subnet to operate on, in CIDR notation (e.g., '192.168.1.0/24')"
+    )
+    args = parser.parse_args()
+
+    try:
+        # Use the ipaddress module to configure the network
+        network = ipaddress.ip_network(args.subnet, strict=False)
+        all_hosts = list(network.hosts())
+
+        if len(all_hosts) < 101:
+            raise ValueError("Subnet is too small. It must contain at least 101 usable addresses.")
+            
+        dhcp_config["server_ip"] = str(all_hosts[0])
+        dhcp_config["offer_ip"] = str(all_hosts[99]) # Offer the 100th usable address
+        dhcp_config["subnet_mask"] = str(network.netmask)
+        dhcp_config["broadcast_ip"] = str(network.broadcast_address)
+        
+        dhcp_server()
+
+    except ValueError as e:
+        print(f"Error: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+
