@@ -955,6 +955,7 @@ to this section.
 \item {\tt \$eth\_device} Alternet ethernet device, see \ref{networks} below.
 \item {\tt \$create\_network} Create a network service node and attach it to the named switch, intended
 to provide DHCP services to targets that requrire it. This overwrites any connections to ETH0.  See \ref{DHCP}.
+The service node will have NAPT and real DNS disabled.  
 \item {\tt \$service\_node\_ip\_address} If service node creation is requested, assign the node this ip address, which
 should be the gateway address and/or dhcp server address used by the target.
 
@@ -1097,7 +1098,7 @@ reach external networks (e.g., to install packages), consider using {\tt service
 \label{DHCP}
 If you have an ARM or x86 target that requires DHCP to get an IP address, use the {\tt create\_network} environment variable, providing a value
 naming one of the switches to which a service node will be created.  The first IP address by default to the device will be 10.10.0.100.
-That service node will have NAPT disabled.  Note you must set the switch value to NONE for the named switch.  An alternative is to add
+That service node will have NAPT and real DNS disabled.  Note you must set the switch value to NONE for the named switch.  An alternative is to add
 a DHCP server to the driver.
 
 \subsubsection{Configurting VLANs}
