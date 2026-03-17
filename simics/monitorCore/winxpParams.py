@@ -11,9 +11,12 @@ import resimUtils
 import memUtils
 import decode
 class WinxpParams():
-    def __init__(self, param, target):
+    def __init__(self, param, target, lgr=None):
         ''' Get the cpu name as a variable for future reference '''
-        self.lgr = resimUtils.getLogger('WinxpParams', '/tmp/WinxpParams.log')
+        if lgr is None:
+            self.lgr = resimUtils.getLogger('WinxpParams', 'logs')
+        else:
+            self.lgr = lgr
         self.kernel_start = 0x80000000
         cmd = 'board.get-processor-list'
         proclist = SIM_run_command(cmd)
@@ -26,10 +29,12 @@ class WinxpParams():
         self.call_list = []
         resim_dir = os.getenv('RESIM_DIR')
         print('resim_dir is %s' % resim_dir)
+        self.lgr.debug('WinxpParams resim_dir is %s' % resim_dir)
         map_file = os.path.join(resim_dir,'windows', 'winxp.json')
         self.call_map = None
         with open(map_file) as fh:
             self.call_map = json.load(fh)
+        self.lgr.debug('WinxpParams map_file %s' % map_file)
         ''' Set the mode hap '''
         self.pending_stop_hap = None
         self.stop_hap = None
@@ -63,6 +68,7 @@ class WinxpParams():
         self.thread_next = None
         self.thread_prev = None
         self.count_offset = None
+        self.lgr.debug('WinxpParams call watchMode')
         self.watchMode()
 
 
@@ -102,6 +108,7 @@ class WinxpParams():
         if self.mode_hap is None:
             return
         eax = self.getRegValue('eax')
+        self.lgr.debug('WinxpParams modeChanged eax 0x%x' % eax)
         if new == Sim_CPU_Mode_Supervisor:
             if eax not in self.call_list:
                 self.call_list.append(eax)
@@ -153,6 +160,7 @@ class WinxpParams():
         ''' set the mode hap'''
         SIM_run_command('enable-reverse-execution')
         self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, None)
+        self.lgr.debug('WinxpParams watchMode set hap')
 
     def rmModeHap(self):
         ''' remove the mode hap (otherwise reversing gets messy) '''

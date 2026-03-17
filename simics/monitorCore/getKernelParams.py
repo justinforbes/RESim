@@ -1934,7 +1934,7 @@ class GetKernelParams():
         cpl = memUtils.getCPL(self.cpu)
         if self.os_type == 'WINXP':
              self.lgr.debug('is WINXP')
-             winxpParams.WinxpParams(self.param, self.target)
+             winxpParams.WinxpParams(self.param, self.target, lgr=self.lgr)
         elif self.cpu.architecture == 'ppc32':
             self.ppc_kparams.getParams()
         elif cpl != 0:
