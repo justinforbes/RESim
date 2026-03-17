@@ -408,6 +408,12 @@ class LaunchRESim():
             SIM_run_command('dhcp_service_node.disable-real-dns')
         except:
             pass
+        try:
+            # for case where snapshot was created before naming of service node was fixed
+            SIM_run_command('service_node_cmp0.disable-real-dns')
+            SIM_run_command('service_node_cmp0.sn->napt_enable = 0')
+        except:
+            pass
         '''
         Either launch monitor, or generate kernel parameter file depending on CREATE_RESIM_PARAMS
         '''
