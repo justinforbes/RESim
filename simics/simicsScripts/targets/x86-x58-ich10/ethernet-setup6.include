@@ -45,7 +45,7 @@ decl {
  param eth_connector : string
  ! Ethernet connector on the virtual machine to connect to the Ethernet link.
 
- param connect_real_network : {"no", "napt"} = "napt"
+ param connect_real_network : {"no", "napt"} = "no"
  ! Connects the simulated Ethernet link to the host network using NAPT
  ! (Network Address Port Translation).
 
@@ -135,14 +135,14 @@ if $service_node == NIL and $create_service_node == TRUE {
 }
 
 # Connect using NAPT to the real network (unless already connected)
-if $connect_real_network == "napt" {
-    if $service_node {
-        if $service_node.sn->napt_enable == FALSE {
-            $eth_link.connect-real-network-napt
-            $service_node.sn.enable-real-dns
-        }
-    } else {
-        echo ("Warning: A service-node is needed to connect to the real"
-              + " network. Ignoring request to connect to real network.")
-    }
-}
+#if $connect_real_network == "napt" {
+#    if $service_node {
+#        if $service_node.sn->napt_enable == FALSE {
+#            $eth_link.connect-real-network-napt
+#            $service_node.sn.enable-real-dns
+#        }
+#    } else {
+#        echo ("Warning: A service-node is needed to connect to the real"
+#              + " network. Ignoring request to connect to real network.")
+#    }
+#}

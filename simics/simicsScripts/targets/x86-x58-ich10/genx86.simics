@@ -10,7 +10,7 @@ echo "using disk image "+$disk_image
 
 if not defined create_network {$create_network = TRUE}
 if not defined connect_real_network {$connect_real_network = FALSE}
-if not defined network_connection {$network_connection = "napt"}
+if not defined network_connection {$network_connection = "no"}
 
 if $simics_version == 5 {
     run-command-file "%script%/x86-x58-ich10-system5.include"

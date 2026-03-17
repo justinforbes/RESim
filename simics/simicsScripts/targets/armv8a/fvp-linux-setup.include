@@ -79,6 +79,7 @@ if ($system_info) {
 
 if $create_network == TRUE {
     $eth_connector = $system + ".eth"
+    $service_node_name="dhcp_service_node"
     run-command-file "%simics%/targets/common/ethernet-setup.include"
 }
 
