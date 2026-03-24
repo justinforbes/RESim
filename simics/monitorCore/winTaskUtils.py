@@ -433,6 +433,8 @@ class WinTaskUtils():
             return None, None, -1
         if cur_proc_rec is None:
             return None, None, None
+        if cur_proc_rec == 0:
+            return None, None, None
         #self.lgr.debug('winTaskUtils curThread get comm')
         comm = self.mem_utils.readString(self.cpu, cur_proc_rec + self.param.ts_comm, 16)
         #self.lgr.debug('winTaskUtils curThread comm %s' % comm)
@@ -903,11 +905,12 @@ class WinTaskUtils():
     def findThreads(self, cur_thread=None):
         ''' return a dictionary of all threads for the current thread or given thread record address'''
         if self.os_type == 'WINXP':
-            self.lgr.debug('winTaskUtils findThreads, xp use findThreadsFromProcXP')
+            #self.lgr.debug('winTaskUtils findThreads, xp use findThreadsFromProcXP')
             cur_proc = self.getCurProcRec()
             return self.findThreadsFromProcXP(cur_proc)
         else:
-            self.lgr.debug('winTaskUtils findThreads')
+            #self.lgr.debug('winTaskUtils findThreads')
+            pass
             
         thread_id_dict = {}
         cur_proc = self.getCurProcRec(cur_thread_in=cur_thread)
@@ -915,7 +918,7 @@ class WinTaskUtils():
             self.lgr.error('winTaskUtils findThreads failed to get cur_proc from getCurProcRec')
             return thread_id_dict
         else:
-            self.lgr.debug('winTaskUtils findThreads cur_proc 0x%x ' % (cur_proc))
+            #self.lgr.debug('winTaskUtils findThreads cur_proc 0x%x ' % (cur_proc))
             comm = self.mem_utils.readString(self.cpu, cur_proc + self.param.ts_comm, self.commSize())
             pid = self.mem_utils.readWord32(self.cpu, cur_proc + self.param.ts_pid)
             if pid is None:
@@ -941,7 +944,7 @@ class WinTaskUtils():
                     if next_thread is None or next_thread in got:
                         break
                     got.append(next_thread)
-                    self.lgr.debug('winTaskUtils findThreads adding 0x%x' % next_thread)
+                    #self.lgr.debug('winTaskUtils findThreads adding 0x%x' % next_thread)
                     ''' TBD compute this delta by looping each next_thread we find and computing the smallest delta from the cur_thread values'''
                     rec_start = next_thread - self.THREAD_NEXT
                     thread_id_ptr = rec_start + self.getThreadIDOffset()
@@ -961,7 +964,7 @@ class WinTaskUtils():
         elif proc == 0:
             self.lgr.error('winTaskUtils findThreadsFromProc proc of zero from getCurProcRec')
         else:
-            self.lgr.debug('winTaskUtils findThreadsFromProc proc 0x%x ' % (proc))
+            #self.lgr.debug('winTaskUtils findThreadsFromProc proc 0x%x ' % (proc))
             comm = self.mem_utils.readString(self.cpu, proc + self.param.ts_comm, self.commSize())
             pid = self.mem_utils.readWord32(self.cpu, proc + self.param.ts_pid)
             if pid is None:
@@ -969,16 +972,16 @@ class WinTaskUtils():
                 return thread_id_dict
 
             active_threads = self.mem_utils.readWord32(self.cpu, proc + self.ACTIVE_THREADS)
-            self.lgr.debug('winTaskUtils findThreadsFromProc proc 0x%x pid:%d (%s) active_threads 0x%x' % (proc, pid, comm, active_threads))
+            #self.lgr.debug('winTaskUtils findThreadsFromProc proc 0x%x pid:%d (%s) active_threads 0x%x' % (proc, pid, comm, active_threads))
             if active_threads < 1:
                 #print('not enough threads %d' % active_threads)
                 self.lgr.debug('winTaskUtils findThreadsFromProc not enough threads %d' % active_threads)
                 return thread_id_dict
             thread_list_head = self.mem_utils.readPtr(self.cpu, proc + self.THREAD_HEAD)
-            self.lgr.debug('findThreadsFromProc thread list head is 0x%x' % thread_list_head)
+            #self.lgr.debug('findThreadsFromProc thread list head is 0x%x' % thread_list_head)
 
             next_thread = thread_list_head - thread_prev
-            self.lgr.debug('findThreadsFromProc next_thread read as 0x%x' % next_thread)
+            #self.lgr.debug('findThreadsFromProc next_thread read as 0x%x' % next_thread)
             if next_thread is not None:
                 got = []
                 got.append(next_thread)
