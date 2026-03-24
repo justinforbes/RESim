@@ -6633,7 +6633,7 @@ class GenMonitor():
         print('cs 0x%x' % cs)
 
     def findThreads(self):
-        thread_dict = self.task_utils[self.target].findThreads(quiet=False)
+        thread_dict = self.task_utils[self.target].findThreads()
         return thread_dict
 
     def showThreads(self):
@@ -7315,9 +7315,9 @@ class GenMonitor():
     def mftx(self):
         thread_list = self.task_utils[self.target].getThreadList()
     def mfty(self):
-        #thread_list = self.task_utils[self.target].findThreads()
-        proc = self.getCurProcRec()
-        thread_list = self.task_utils[self.target].getThreadList(proc=proc)
+        thread_list = self.task_utils[self.target].findThreads()
+        #proc = self.getCurProcRec()
+        #thread_list = self.task_utils[self.target].getThreadList(proc=proc)
 
 
 if __name__=="__main__":        
