@@ -40,6 +40,7 @@ class WinxpParams():
         self.stop_hap = None
         self.call_entry_addr = None
         self.call_exit_addr = None
+        self.iret_exit_addr = None
         self.fault_addr = None
         self.bp = None
         self.break_hap = None
@@ -69,6 +70,16 @@ class WinxpParams():
         self.thread_prev = None
         self.count_offset = None
         self.lgr.debug('WinxpParams call watchMode')
+
+        self.fs_base = None
+        self.current_task_phys = None
+        self.param.current_task_fs  = False
+
+        # optimization for finding exits 
+        self.hits = []
+        self.hack_exits = 0
+        self.hack_exits_done = False
+
         self.watchMode()
 
 
@@ -108,7 +119,7 @@ class WinxpParams():
         if self.mode_hap is None:
             return
         eax = self.getRegValue('eax')
-        self.lgr.debug('WinxpParams modeChanged eax 0x%x' % eax)
+        #self.lgr.debug('WinxpParams modeChanged eax 0x%x' % eax)
         if new == Sim_CPU_Mode_Supervisor:
             if eax not in self.call_list:
                 self.call_list.append(eax)
@@ -117,9 +128,14 @@ class WinxpParams():
                     call_name = self.call_map[eax_str]
                 else:
                     call_name = 'unknown'
+                self.lgr.debug('modeChanged old %s new %s  eax is %d (0x%x) call_name: %s' % (old, new, eax, eax, call_name))
                 #print('in mode changed old %s new %s  eax is %d (0x%x) call_name: %s' % (old, new, eax, eax, call_name))
                 #if call_name == 'NtReadFile':
-                if self.call_entry_addr is not None and self.fault_addr is not None and self.call_exit_addr is not None:
+                #if self.call_entry_addr is not None and self.fault_addr is not None and self.call_exit_addr is not None and self.iret_exit_addr is not None:
+                if self.hack_exits_done:
+                    self.lgr.debug('modeChanged have call_entry_addr, fault_addr and call_exit_addr, call findCurrent')
+                    #SIM_break_simulation('remove this')
+                    #return
                     SIM_run_alone(self.stopAndCall, self.findCurrent) 
                 else:
                     if self.call_entry_addr is None or self.fault_addr is None:
@@ -128,14 +144,27 @@ class WinxpParams():
                 #print('is read file')
                 #SIM_break_simulation('breakit')
         else:
-            if self.call_exit_addr is None:
-                print('is user')
-                eip = self.getRegValue('eip')
-                self.call_exit_addr = eip
-                print('modeChanged recorded exit address as 0x%x' % eip)
+            eip = self.getRegValue('eip')
+            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            #self.lgr.debug('modeChanged kernel exit eip 0x%x %s' % (eip, instruct[1]))
+            self.hack_exits = self.hack_exits+1
+            if self.hack_exits > 6000:
+                self.hack_exits_done = True
+            if eip not in self.hits:
+                self.lgr.debug('modeChanged some exit at 0x%x %s' % (eip, instruct[1]))
+                self.hits.append(eip)
+                if self.call_exit_addr is None and instruct[1].startswith('sysexit'):
+                    self.call_exit_addr = eip
+                    print('modeChanged recorded call_exit_addr address as 0x%x' % eip)
+                    self.lgr.debug('modeChanged recorded iret address as 0x%x' % eip)
+                elif self.iret_exit_addr is None and instruct[1].startswith('iret'):
+                    self.iret_exit_addr = eip
+                    print('modeChanged recorded iret_exit_addr address as 0x%x' % eip)
+                    self.lgr.debug('modeChanged recorded exit address as 0x%x' % eip)
 
     def inKernelEntry(self, dumb=None):
         #print('inKernelEntry')
+        self.lgr.debug('inKernelEntry')
         enter_eip = self.getRegValue('eip')
         cli.quiet_run_command('rev 1')
         eip = self.getRegValue('eip')
@@ -144,15 +173,19 @@ class WinxpParams():
             if self.call_entry_addr is None:
                 self.call_entry_addr = enter_eip
                 print('call entry addr 0x%x' % enter_eip)
+                self.lgr.debug('inKernelEntry call entry addr 0x%x' % enter_eip)
             elif self.call_entry_addr != enter_eip:
                 print('call entry addr 0x%x DOES NOT MATCH previous 0x%x' % (enter_eip, self.call_entry_addr))
+                self.lgr.debug('inKernelEntry call entry addr 0x%x DOES NOT MATCH previous 0x%x' % (enter_eip, self.call_entry_addr))
         else:
+            self.lgr.debug('inKernelEntry instruct %s not a syscall assume page fault enter addr 0x%x' % (instruct[1], enter_eip))
             print('not a syscall assume page fault enter addr 0x%x' % enter_eip)
             self.fault_addr = enter_eip
         SIM_continue(0)
 
     def findCurrent(self, dumb=None):
         print('findCurrent, now begin to find the current task pointer')
+        self.lgr.debug('findCurrent, now begin to find the current task pointer')
         self.rmModeHap()
         self.setEnterBreak()
 
@@ -169,6 +202,7 @@ class WinxpParams():
 
     def setEnterBreak(self, dumb=None):
         print('setEnterBreak on previously found syscall entry')
+        self.lgr.debug('setEnterBreak on previously found syscall entry')
         self.enter_bp = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, self.call_entry_addr, 1, 0)
         self.enter_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.enterHap, None, self.enter_bp)
         SIM_continue(0)
@@ -196,7 +230,7 @@ class WinxpParams():
         SIM_run_alone(self.quitAlone, cycles)
 
     def stopAndCall(self, callback):
-        self.lgr.debug('stopAndCall')
+        self.lgr.debug('stopAndCall, callback %s' % str(callback))
         self.stop_hap = self.RES_add_stop_callback(self.stopAndCallHap, callback)
         SIM_break_simulation('stopping simulation...')
 
@@ -219,42 +253,48 @@ class WinxpParams():
         if your_stop:
             self.stop_hap = None
 
-    def testCurrent(self):
-        cli.quiet_run_command('si')
-        print('testCurent ptr_to_current_thread 0x%x' % (self.ptr_to_current_thread))
-        self.cur_thread_addr = self.readWord(self.ptr_to_current_thread)
-        print('testCurent cur_thread_addr is 0x%x' % (self.cur_thread_addr)) 
-        self.bp = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Write, self.cur_thread_addr, 1, 0)
-        self.break_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.breakHap, None, self.bp)
-        print('added break at cur_thread_addr 0x%x' % self.cur_thread_addr)
-        #SIM_continue(0)
-
     def enterHap(self, user_param, conf_object, break_num, memory):
         if self.enter_hap is None:
             return
         #print('enterHap at 0x%x' % memory.logical_address)
-        if self.ptr_to_current_thread is None:
+        if self.ptr_to_current_thread is None and not self.param.current_task_fs:
+            self.lgr.debug('enterHap at 0x%x ptr_to_current_thread is None, call findCurrentLoad' % memory.logical_address)
             SIM_run_alone(self.stopAndCall, self.findCurrentLoad)
         elif self.pid_offset is None:
-            something = self.readWord(self.ptr_to_current_thread)
-            the_offset = self.current_thread_ptr_offset 
-            cur_thread = something + the_offset
-            #print('proc_addr 0x%x' % proc_addr)
-            self.cur_thread_addr = self.readWord(cur_thread)
+            self.lgr.debug('enterHap at pid_offset is None')
+            self.cur_thread_addr = self.getCurThread()
+            if self.cur_thread_addr == 0:
+                print('fix this')
+                return
             if self.cur_thread_addr not in self.did_threads:
                 self.did_threads.append(self.cur_thread_addr)
                 #print('cur_thread_addr 0x%x from cur_thread 0x%x' % (self.cur_thread_addr, cur_thread))
+                self.lgr.debug('enterHap cur_thread_addr 0x%x' % (self.cur_thread_addr))
                 SIM_run_alone(self.stopAndCall, self.atSyscallEnter)
+            else:
+                self.lgr.debug('enterHap cur_thread_addr 0x%x already in did_threads' % self.cur_thread_addr)
         elif self.thread_next is None:
+            self.lgr.debug('enterHap call findThreadOffsets')
             SIM_run_alone(self.stopAndCall, self.findThreadOffsets)
         else:
             SIM_run_alone(self.stopAndCall, self.findCompute)
 
     def getCurThread(self):
-        something = self.readWord(self.ptr_to_current_thread)
-        the_offset = self.current_thread_ptr_offset 
-        cur_thread = something + the_offset
-        cur_thread_addr = self.readWord(cur_thread)
+        cur_thread_addr = None
+        if self.param.current_task_fs:
+            #self.lgr.debug('getCurThread, current_task_phys is 0x%x' % self.current_task_phys)
+            #cur_thread_addr = self.getUnsigned(SIM_read_phys_memory(self.cpu, self.current_task_phys, 4))
+            #self.lgr.debug('getCurThread uses fs ptr_to_current_thread 0x%x' % self.ptr_to_current_thread)
+            something = self.readWord(self.ptr_to_current_thread)
+            #self.lgr.debug('getCurThread, something is 0x%x' % something)
+            something_addr = something + self.current_thread_ptr_offset
+            cur_thread_addr = self.readWord(something_addr)
+            #self.lgr.debug('getCurThread, cur_thread_addr 0x%x' % cur_thread_addr)
+        else:
+            something = self.readWord(self.ptr_to_current_thread)
+            the_offset = self.current_thread_ptr_offset 
+            cur_thread = something + the_offset
+            cur_thread_addr = self.readWord(cur_thread)
         return cur_thread_addr
 
     def findThreadOffsets(self, dumb=None):
@@ -288,14 +328,20 @@ class WinxpParams():
                     break
             if comm_count > 20:
                 print('findThreadOffsets we think the offset is 0x%x' % guess_next)        
+                self.lgr.debug('findThreadOffsets we think the offset is 0x%x' % guess_next)        
                 self.thread_next = guess_next
                 self.thread_prev = guess_next - 4
                 #break
             guess_next = guess_next + 4
+        if self.thread_next is None:
+            self.lgr.error('findThreadOffsets failed to find thread_next, comm_count is %d' % comm_count)
+            return
             
         # We have the next/prev, find the threadID
         self.findThreadID()
+        self.lgr.debug('findThreadOffsets back from findThreadID')
         self.findThreadOffsetInPrec()
+        self.lgr.debug('findThreadOffsets back from findThreadOffsetInPrec')
         self.findThreadCount()
 
     def isclose(self, head, thread_list, guess):
@@ -325,6 +371,7 @@ class WinxpParams():
         pid = self.getPID(cur_proc)
         comm = self.getComm(cur_proc)
         print('findThreadOffsetInPrec got %d threads in thread_list for proc rec 0x%x pid:%d (%s)' % (len(thread_list), cur_proc, pid, comm))
+        self.lgr.debug('findThreadOffsetInPrec got %d threads in thread_list for proc rec 0x%x pid:%d (%s)' % (len(thread_list), cur_proc, pid, comm))
         thread_guess = 0xc0
         for i in range(400):
             thread_addr = cur_proc+ thread_guess
@@ -333,6 +380,7 @@ class WinxpParams():
                 thread = thread_head - self.thread_prev
                 if thread in thread_list:
                     print('findThreadOffsetInPrec offset 0x%x is thread 0x%x, which is in list' % (thread_guess, thread))
+                    self.lgr.debug('findThreadOffsetInPrec offset 0x%x is thread 0x%x, which is in list' % (thread_guess, thread))
                     self.thread_offset_in_prec = thread_guess
                     break
             thread_guess = thread_guess + 4
@@ -352,7 +400,9 @@ class WinxpParams():
             count = self.readWord(count_addr)
             if count == thread_count:
                 print('findThreadCount found match of count %d at offset 0x%x' % (thread_count, count_guess))
+                self.lgr.debug('findThreadCount found match of count %d at offset 0x%x' % (thread_count, count_guess))
                 self.count_offset = count_guess
+                SIM_continue(0)
                 break
             count_guess = count_guess + 4
    
@@ -361,6 +411,7 @@ class WinxpParams():
             client id struct that contains the pid.
         '''
         print('threadId')
+        self.lgr.debug('threadId')
         cur_thread = self.getCurThread()
         cur_proc_addr = cur_thread + self.prec_offset
         prec = self.readWord(cur_proc_addr)
@@ -374,6 +425,7 @@ class WinxpParams():
             if pid_maybe is not None:
                 if pid_maybe == pid:
                     print('findThreadID, thread 0x%x offset 0x%x matches pid %d' % (cur_thread, client_guess, pid))
+                    self.lgr.debug('findThreadID, thread 0x%x offset 0x%x matches pid %d' % (cur_thread, client_guess, pid))
                     got_it = True
                     break
             client_guess = client_guess + 4
@@ -453,6 +505,7 @@ class WinxpParams():
 
     def findCurrentLoad(self, dumb=None):
         print('findCurrentLoad, step until we see what looks like a loading of the current task pointer')
+        self.lgr.debug('findCurrentLoad, step until we see what looks like a loading of the current task pointer')
         hard_count = 0
         our_reg = None
         hardcode = None
@@ -461,9 +514,15 @@ class WinxpParams():
             eip = self.getRegValue('eip')
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             print('instruct is %s' % instruct[1])
+            if 'fs:' in instruct[1]:
+                self.lgr.debug('findCurrentLoad uses fs, call findFS and bail on this findCurrentLoad.  instruct is %s' % instruct[1])
+                self.findFS(eip)
+                break
+            self.lgr.debug('findCurrentLoad instruct is %s' % instruct[1])
             hardcode = decode.getDirectHardMove(instruct[1])
             if hardcode is not None:
                 print('findCurrentLoad is hardcode move %s' % instruct[1])
+                self.lgr.debug('findCurrentLoad is hardcode move %sr' % (instruct[1]))
                 hard_count += 1
                 if hard_count == 2:
                     op2, op1 = decode.getOperands(instruct[1])
@@ -479,13 +538,55 @@ class WinxpParams():
                     self.ptr_to_current_thread = hardcode
                     self.current_thread_ptr_offset =  reg_relative
                     print('findCurrent got hardcode address 0x%x and offset 0x%x' % (self.ptr_to_current_thread, self.current_thread_ptr_offset))
+                    self.lgr.debug('findCurrent got hardcode address 0x%x and offset 0x%x' % (self.ptr_to_current_thread, self.current_thread_ptr_offset))
                     SIM_continue(0)
                     break
+
+    def findFS(self, eip):
+        ''' about to execute first fs: reference.  we want the 2nd '''
+        self.lgr.debug('findFS')
+        cli.quiet_run_command('si')
+        our_reg = None
+        for i in range(100):
+            cli.quiet_run_command('si')
+            eip = self.getRegValue('eip')
+            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            self.lgr.debug('findFS instruct is %s' % instruct[1])
+            fs_value = None
+            if 'fs:' in instruct[1]:
+                prefix, addr = decode.getInBrackets(self.cpu, instruct[1], self.lgr) 
+                print('got addr %s from %s' % (addr, instruct[1]))
+                addr = int(addr, 16)
+                self.fs_base = self.cpu.ia32_fs_base
+                self.param.current_task_fs  = True
+                self.param.fs_base = self.fs_base
+                self.lgr.debug('findFS fs_base: 0x%x addr is 0x%x ' % (self.fs_base, addr))
+                self.ptr_to_current_thread = self.fs_base + addr
+                op2, op1 = decode.getOperands(instruct[1])
+                our_reg = op1
+                break
+        for i in range(10):
+            cli.quiet_run_command('si')
+            eip = self.getRegValue('eip')
+            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            self.lgr.debug('findFS have current_task, look for prec_offset, instruct is %s' % instruct[1])
+            op2, op1 = decode.getOperands(instruct[1])
+            if op2 is not None and '[' in op2 and our_reg in op2:
+                self.lgr.debug('findFS got prec_offset instruct %s' % instruct[1])
+                content = op2.split('[', 1)[1].split(']')[0]
+                if '+' in content:
+                    vstring = content.split('+')[1]
+                    self.current_thread_ptr_offset = int(vstring, 16)
+                    self.lgr.debug('findFS got ptr offset of 0x%x' % self.current_thread_ptr_offset)
+                    break
+ 
+        SIM_continue(0)
 
     def findComm(self):
         ''' Brute force find comm field, and thereby also the offset of the EPROCESS pointer
         '''
         # we'll start at offset 0x200 and look for addresses from there
+        self.lgr.debug('findComm cur_thread_addr 0x%x' % self.cur_thread_addr)
         cur_guess = 0x200 + self.cur_thread_addr
         cheat = 0x220 + self.cur_thread_addr
         got_it = False
@@ -494,6 +595,7 @@ class WinxpParams():
             test_offset = cur_guess - self.cur_thread_addr
             if prec is not None and prec > self.kernel_start and test_offset not in self.bad_prec_offsets:
                 #print('prec to try is 0x%x' % prec)
+                self.lgr.debug('findComm prec to try is 0x%x' % prec)
                 comm_guess = prec + 0x50
                 for j in range (100):
                     #if cur_guess == cheat:
@@ -503,11 +605,14 @@ class WinxpParams():
                     #    print('some_string 0x%x  %s' % (comm_guess, some_string))
                     if some_string is not None and some_string in ['svchost.exe','services.exe']:
                         print('KACHING')
+                        self.lgr.debug('findComm KACHING')
                         got_it = True
                         self.prec_offset = cur_guess - self.cur_thread_addr
                         print('prec_offset is 0x%x' % self.prec_offset)
+                        self.lgr.debug('findComm prec_offset is 0x%x' % self.prec_offset)
                         self.comm_offset = comm_guess - prec
                         print('comm_offset is 0x%x' % self.comm_offset)
+                        self.lgr.debug('findComm comm_offset is 0x%x' % self.comm_offset)
                         cur_proc_addr = self.cur_thread_addr + self.prec_offset
                         prec = self.readWord(cur_proc_addr)
                         some_string = self.getComm(prec)
@@ -520,6 +625,7 @@ class WinxpParams():
             cur_guess = cur_guess + 4
         if not got_it:
             print('failed to find known service, try next thread')
+            self.lgr.debug('findComm failed to find known service, try next thread')
             SIM_continue(0)
         else:
             self.testing_prec_offset = 0
@@ -541,15 +647,18 @@ class WinxpParams():
 
     def atSyscallEnter(self, dumb=None):
         #print('atSyscallEnter')
+        self.lgr.debug('atSyscallEnter')
         if self.testing_prec_offset is not None:
             cur_proc_addr = self.cur_thread_addr + self.prec_offset
             prec = self.readWord(cur_proc_addr)
             comm_addr = prec + self.comm_offset
             some_string = self.readString(comm_addr, 20)
             #print('comm for prec 0x%x is %s' % (prec, some_string))
+            self.lgr.debug('atSyscallEnter comm for prec 0x%x is %s' % (prec, some_string))
             if not some_string.endswith('.exe') and len(some_string) < 8:
                 self.testing_prec_offset = None
                 self.bad_prec_offsets.append(self.prec_offset)
+                self.lgr.debug('atSyscallEnter bad prec offset, setting prec_offset to None??? some_trig is %s' % some_string)
                 self.prec_offset = None
                 SIM_continue(0)
             else:
@@ -561,7 +670,8 @@ class WinxpParams():
                     SIM_continue(0)
                 else:
                     SIM_continue(0)
-        elif self.prec_offset is None:
+        elif self.prec_offset is None: 
+            self.lgr.debug('atSyscallEnter call findComm')
             self.findComm()
         elif self.next_prec is None:
             print('we have prec and comm, look for list pointer')
@@ -598,6 +708,12 @@ class WinxpParams():
             print('prec 0x%x comm: %s' % (prec, comm))
             if comm == 'System':
                 system_prec = prec
+        if system_prec is None:
+            self.lgr.debug('pidSearch failed to see System, set prec_offset to none and try again')
+            self.prec_offset = None
+            self.next_prec = None
+            SIM_continue(0)
+            return
         print('pidSearch prec_list has %d items' % len(prec_list))
         pid_guess = 0x70
         maybe_offsets = []
@@ -803,6 +919,7 @@ class WinxpParams():
     def saveParam(self):
         self.param.sysenter = self.call_entry_addr
         self.param.sysexit = self.call_exit_addr
+        self.param.iretd = self.iret_exit_addr
         self.param.page_fault = self.fault_addr
         self.param.current_task = self.ptr_to_current_thread
         self.param.current_thread_offset = self.current_thread_ptr_offset 
