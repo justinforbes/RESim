@@ -2329,6 +2329,14 @@ class GetKernelParams():
         key_list = call_map.keys()
         self.lgr.debug('computeESIJumpTable len of key_list is %d' % len(key_list))
 
+    def getTargetEnv(self, name, target=None):
+        retval = None
+        if target is None or target=='unknown':
+            target = self.target
+        if name in self.comp_dict[target]:
+            retval = self.comp_dict[target][name]
+        return retval
+
 if __name__ == '__main__':
     gkp = GetKernelParams()
     #gkp.runUntilSwapper()
