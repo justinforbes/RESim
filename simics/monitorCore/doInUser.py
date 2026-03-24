@@ -23,7 +23,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
 '''
 '''
-Call a function from user space, assuming we start in kernel space
+Call a function from user space, assuming we start in kernel space. Accepts a list of callbacks, or a single one
 '''
 from simics import *
 import resimHaps
@@ -33,7 +33,10 @@ class DoInUser():
     def __init__(self, top, cpu, callback, param, task_utils, mem_utils, context_manager, lgr, tid=None):
         self.top = top
         self.cpu = cpu
-        self.callback = callback
+        if type(callback) is list:
+            self.callback_list = callback
+        else:
+            self.callback_list = [callback]
         self.param = param
         self.task_utils = task_utils
         self.mem_utils = mem_utils
@@ -49,6 +52,10 @@ class DoInUser():
         self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, self.cpu)
         self.lgr.debug('doInUser mode hap set for tid:%s' % self.tid)
 
+    def doCallbacks(self, dumb):
+        for cb in self.callback_list:
+            cb(self.param)
+
     def modeChanged(self, cpu, one, old, new):
         if self.mode_hap is None:
             return
@@ -62,7 +69,7 @@ class DoInUser():
             if tid == self.tid:
                 eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
                 self.lgr.debug('doInUser mode_changed in user mode, syscall_ret 0x%x do callback from cycle 0x%x' % (eax, self.cpu.cycles))
-                SIM_run_alone(self.callback, self.param) 
+                SIM_run_alone(self.doCallbacks, None)
                 hap = self.mode_hap
                 SIM_run_alone(resimHaps.RES_delete_mode_hap, hap)
                 self.mode_hap = None
