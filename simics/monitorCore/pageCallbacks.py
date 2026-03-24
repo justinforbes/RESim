@@ -448,7 +448,7 @@ class PageCallbacks():
 
 
     class MyMemTrans():
-        def __init__(self, cpu, memory, tid):
+        def __init__(self, cpu, memory, tid=None):
             self.length = memory.size
             self.op_type = SIM_get_mem_op_type(memory)
             self.type_name = SIM_get_mem_op_type_name(self.op_type)
