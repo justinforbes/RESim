@@ -92,12 +92,14 @@ class WinCallExit():
            Includes parameter checking to see if the call meets criteria given in
            a paramter buried in exit_info (see ExitInfo class).
         '''
+        if tid == 4:
+            return False
         if exit_info is None:
             ''' TBD why does this get called, windows and linux?'''
-            self.lgr.debug('winCallExit cell %s exit_info is None' % (self.cell_name))
+            self.lgr.debug('winCallExit handleExit cell %s tid:%s exit_info is None' % (self.cell_name, tid))
             return False
         if tid == 0:
-            self.lgr.debug('winCallExit cell %s tid is zero' % (self.cell_name))
+            self.lgr.debug('winCallExit handleExit cell %s tid is zero' % (self.cell_name))
             return False
 
         if self.dataWatch is not None and not self.dataWatch.disabled:
