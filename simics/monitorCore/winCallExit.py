@@ -94,10 +94,10 @@ class WinCallExit():
         '''
         if exit_info is None:
             ''' TBD why does this get called, windows and linux?'''
-            #self.lgr.debug('winCallExit cell %s exit_info is None' % (self.cell_name))
+            self.lgr.debug('winCallExit cell %s exit_info is None' % (self.cell_name))
             return False
         if tid == 0:
-            #self.lgr.debug('winCallExit cell %s tid is zero' % (self.cell_name))
+            self.lgr.debug('winCallExit cell %s tid is zero' % (self.cell_name))
             return False
 
         if self.dataWatch is not None and not self.dataWatch.disabled:
@@ -113,12 +113,19 @@ class WinCallExit():
         if callname is None:
             self.lgr.debug('winCallExit bad callnum %d' % exit_info.callnum)
             return
-        #self.lgr.debug('winCallExit cell %s callnum %d name %s  tid:%s  parm1: 0x%x' % (self.cell_name, exit_info.callnum, callname, tid, exit_info.frame['param1']))
+        #self.lgr.debug('winCallExit cell %s callnum %d name %s  tid:%s  param1: 0x%x' % (self.cell_name, exit_info.callnum, callname, tid, exit_info.frame['param1']))
         status = "Unknown - not mapped"
         if eax in winNTSTATUS.ntstatus_map:
             status = winNTSTATUS.ntstatus_map[eax]
-        
-        trace_msg = 'tid:%s (%s) return from %s with status %s (0x%x)' % (tid, comm, callname, status, eax)
+            trace_msg = 'tid:%s (%s) return from %s with status %s (0x%x)' % (tid, comm, callname, status, eax)
+        else:
+            trace_msg = 'tid:%s (%s) return from %s wth eax 0x%x' % (tid, comm, callname, eax)
+            if eax == 0x9f000:
+                self.lgr.debug(trace_msg)
+                print(trace_msg)
+                SIM_break_simulation('remove this')
+                return
+        #self.lgr.debug('winCallExit trace_msg %s' % trace_msg)
         if exit_info.append_msg is not None: 
             trace_msg = trace_msg + ' '+exit_info.append_msg
 
@@ -147,7 +154,7 @@ class WinCallExit():
                 if exit_info.old_fd is not None:
                     trace_msg = trace_msg + " handle: 0x%x" % exit_info.old_fd  
                 #trace_msg = trace_msg+ ' with error: 0x%x' % (eax)
-                self.lgr.debug('winCallExit %s' % (trace_msg))
+                self.lgr.debug('winCallExit %s cycle: 0x%x' % (trace_msg, self.cpu.cycles))
             exit_info.matched_param = None
             #if eax == 0xc00000a3 and exit_info.asynch_handler is not None:
             #    self.lgr.debug('winCallExit is STATUS_DEVICE_NOT_READY tid: %s fd: 0x%x' % (tid, exit_info.old_fd))
@@ -163,7 +170,7 @@ class WinCallExit():
                      SIM_break_simulation('bad fd read from 0x%x' % exit_info.retval_addr)
                      return
                 trace_msg = trace_msg + ' fname_addr: 0x%x fname: %s Handle: 0x%x' % (exit_info.fname_addr, exit_info.fname, fd)
-                self.lgr.debug('winCallExit %s' % (trace_msg))
+                self.lgr.debug('winCallExit %s cycle: 0x%x' % (trace_msg, self.cpu.cycles))
                
                 if (self.top.trackingThreads() or (self.top.osType(self.cell_name) == 'WINXP' and exit_info.syscall_instance.name == 'CreateProcessEx')) and (self.soMap is not None and (exit_info.fname.lower().endswith('.nls') or exit_info.fname.lower().endswith('.dll') or exit_info.fname.lower().endswith('.so') or exit_info.fname.lower().endswith('.exe'))):
                     self.lgr.debug('winCallExit adding fname: %s with fd: %d to tid:%s' % (exit_info.fname, fd, tid))
@@ -183,7 +190,7 @@ class WinCallExit():
                 fd = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
                 if fd is not None:
                     trace_msg = trace_msg + ' fname_addr 0x%x fname: %s Handle: 0x%x' % (exit_info.fname_addr, exit_info.fname, fd)
-                    self.lgr.debug('winCallExit %s' % (trace_msg))
+                    self.lgr.debug('winCallExit %s cycle: 0x%x' % (trace_msg, self.cpu.cycles))
 
                     if self.top.trackingThreads() and (self.soMap is not None and (exit_info.fname.lower().endswith('.nls') or exit_info.fname.lower().endswith('.dll') or exit_info.fname.lower().endswith('.so'))):
                         self.lgr.debug('adding fname: %s with fd: %d to tid:%s' % (exit_info.fname, fd, tid))
@@ -249,9 +256,14 @@ class WinCallExit():
 
         elif callname == 'MapViewOfSection':
             section_handle = exit_info.old_fd
-            if self.top.os_type == 'WINXP':
+            if self.os_type == 'WINXP':
+                self.lgr.debug('winCallExit param7 (size addr) 0x%x, param3 (load_addr) 0x%x' % (exit_info.frame['param7'], exit_info.frame['param3']))
                 size = self.mem_utils.readWord(self.cpu, exit_info.frame['param7'])
                 load_address = self.mem_utils.readWord(self.cpu, exit_info.frame['param3'])
+                self.lgr.debug('winCallExit %s load_addr 0x%x' % (callname, load_address))
+                if load_address is None or size is None:
+                    SIM_break_simulation('remove this')
+                    return
             else:
                 load_address = exit_info.syscall_instance.paramOffPtr(3, [0], exit_info.frame, word_size)
                 size = exit_info.syscall_instance.stackParamPtr(3, 0, exit_info.frame) 
@@ -260,13 +272,14 @@ class WinCallExit():
                 self.lgr.debug('winCallExit '+trace_msg)
                 if self.top.trackingThreads():
                     self.soMap.mapSection(tid, section_handle, load_address, size)
+                else:
+                    self.lgr.debug('winCallExit not tracking threads '+trace_msg)
             else:
-                #self.lgr.debug('winCallExit %s tid:%s (%s) fd: 0x%x returned bad load address or size?' % (callname, tid, comm, exit_info.old_fd))
+                self.lgr.debug('winCallExit %s tid:%s (%s) fd: 0x%x returned bad load address or size?' % (callname, tid, comm, exit_info.old_fd))
                 if load_address is not None:
                     trace_msg = trace_msg+' section_handle: 0x%x bad load address' % (section_handle)
                 else:
                     trace_msg = trace_msg+' section_handle: 0x%x bad size' % (section_handle)
-                self.lgr.debug('winCallExit not tracking threads '+trace_msg)
 
         elif callname in ['CreateEvent', 'OpenProcessToken', 'OpenProcess']:
             fd = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
@@ -444,7 +457,6 @@ class WinCallExit():
             if  exit_info.asynch_handler is not None and exit_info.asynch_handler.trace_msg is not None:
                 trace_msg = exit_info.asynch_handler.trace_msg
             self.context_manager.setIdaMessage(trace_msg)
-            print(trace_msg)
             self.lgr.debug(trace_msg)
             #self.lgr.debug('winCallExit found matching call parameters callnum %d name %s' % (exit_info.callnum, callname))
             #my_syscall = self.top.getSyscall(self.cell_name, callname)
@@ -453,7 +465,7 @@ class WinCallExit():
             #    async_waiting = True
             #    self.lgr.debug('winCallExit think async still waiting so do not stop')
             #if not async_waiting and (not my_syscall.linger or (my_syscall.name == 'traceAll' and exit_info.matched_param.name.startswith('runTo'))):
-            if async_was_ready and (not my_syscall.linger or (my_syscall.name in ['traceAll', 'trackSO'] and exit_info.matched_param.name.startswith('runTo'))):
+            if not exit_info.matched_param.name in ['toCreateProc'] and async_was_ready and (not my_syscall.linger or (my_syscall.name in ['traceAll', 'trackSO'] and exit_info.matched_param.name.startswith('runTo'))):
                 self.lgr.debug('winCallExit linger is false, call stopTrace')
                 self.stopTrace()
                 if my_syscall is None:
