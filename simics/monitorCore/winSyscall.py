@@ -485,9 +485,8 @@ class WinSyscall():
         ''' Set exit breaks '''
         #self.lgr.debug('syscallHap in proc %d (%s), callnum: 0x%x  EIP: 0x%x' % (tid, comm, callnum, break_eip))
         #self.lgr.debug('syscallHap frame: %s' % frame_string)
-        #frame_string = taskUtils.stringFromFrame(frame)
-        #self.lgr.debug('syscallHap frame: %s' % frame_string)
-
+        frame_string = taskUtils.stringFromFrame(frame)
+        self.lgr.debug('syscallHap frame: %s' % frame_string)
 
         if self.syscall_info.callnum is not None:
             # computed syscall
@@ -541,8 +540,7 @@ class WinSyscall():
         else:
             ''' tracing all syscalls, or watching for any syscall, e.g., during debug '''
             exit_info = self.syscallParse(callnum, callname, frame, cpu, tid, comm, self.syscall_info)
-            #self.lgr.debug('syscall looking for any, got %d from %d (%s) at 0x%x ' % (callnum, tid, comm, break_eip))
-
+            #self.lgr.debug('syscall looking for any, got %d from %s (%s) at 0x%x exit_info is %s ' % (callnum, tid, comm, break_eip, str(exit_info)))
             if exit_info is not None:
                 if comm != 'tar':
                     name = callname+'-exit' 
@@ -752,7 +750,7 @@ class WinSyscall():
        
 
         # Handle JUST first parameter for a bunch of functions that have Handle as their first, then break out into more params for some
-        elif callname in ['MapViewOfSection', 'WaitForSingleObject', 'QueryKey', 'QueryMultipleValueKey', 'QuerySection', 'QueryInformationFile', 'SetInformationFile', 'QueryInformationToken', 'QueryValueKey', 'Close','RequestWaitReplyPort', 'ClearEvent', 'NotifyChangeKey', 'EnumerateValueKey']:
+        elif callname in ['MapViewOfSection', 'WaitForSingleObject', 'QueryKey', 'QueryMultipleValueKey', 'QuerySection', 'QueryInformationFile', 'SetInformationFile', 'QueryInformationToken', 'QueryValueKey', 'Close','RequestWaitReplyPort', 'ReplyWaitReceivePortEx', 'ClearEvent', 'NotifyChangeKey', 'EnumerateValueKey']:
             exit_info.old_fd = frame['param1']
             trace_msg = trace_msg+' Handle: 0x%x' % (exit_info.old_fd)
             if callname in ['QueryValueKey', 'EnumerateValueKey']:
@@ -794,6 +792,11 @@ class WinSyscall():
                 exit_info.retval_addr = frame['param3']
                 exit_info.fname_addr = frame['param2']
                 trace_msg = trace_msg + ' LPCRequestAddr: 0x%x LPCReplyAddr: 0x%x' % (exit_info.fname_addr, exit_info.retval_addr)
+
+            elif callname == 'ReplyWaitReceivePortEx':
+                exit_info.retval_addr = frame['param2']
+                trace_msg = trace_msg + ' retval addr: 0x%x' % (exit_info.retval_addr)
+                self.lgr.debug('winSyscall %s' % trace_msg)
            
             elif callname == 'QueryInformationFile':
                 param5 = frame['param5'] 
