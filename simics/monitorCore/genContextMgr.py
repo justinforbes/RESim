@@ -212,6 +212,8 @@ class GenContextMgr():
         self.nowatch_list = []
         self.suspend_watch_list = []
         self.watching_tasks = False
+        # hack for windows threads not yet in list
+        self.pending_watch_rec = None
         self.single_thread = False
         self.lgr = lgr
         self.ida_message = None
@@ -578,7 +580,7 @@ class GenContextMgr():
         if self.isSuspended(new_task):
             SIM_run_alone(self.restoreSuspendContext, None)
             #self.restoreSuspendContext()
-        elif new_task in self.watch_rec_list:
+        elif new_task in self.watch_rec_list or new_task == self.pending_watch_rec:
             if not self.isDebugContext() and self.debugging_tid is not None:
                 #self.lgr.debug('contextManager alterWatches restore RESim context tid:%s' % tid)
                 #SIM_run_alone(self.restoreDebugContext, None)
@@ -1403,6 +1405,7 @@ class GenContextMgr():
             ''' suspect the thread is in the kernel, e.g., on a syscall, and has not yet been formally scheduled, and thus
                 has no place in the task list? OR all threads share the same next_ts pointer'''
             self.lgr.debug('contextManager watchExit failed to get list_addr tid %s cur_tid %s rec 0x%x' % (tid, cur_tid, rec))
+            self.pending_watch_rec = rec
             return False
         
         if tid not in self.task_rec_bp or self.task_rec_bp[tid] is None:
@@ -1739,8 +1742,10 @@ class GenContextMgr():
             Intended for cases where comm is not yet running.
         '''
         prog_comm = self.task_utils.progComm(prog)
-        self.watch_for_prog.append(prog_comm)
-        self.watch_for_prog_callback[prog_comm] = callback
+        if prog_comm not in self.watch_for_prog:
+            self.watch_for_prog.append(prog_comm)
+            self.watch_for_prog_callback[prog_comm] = []
+        self.watch_for_prog_callback[prog_comm].append(callback)
         self.setTaskHap()
         self.lgr.debug('contextManager callWhenFirstScheduled comm %s' % prog_comm)
 
@@ -1760,8 +1765,8 @@ class GenContextMgr():
                 self.lgr.debug('contextManager checkFirstSchedule got first for tid:%s (%s)' % (tid, comm))
                 self.watch_for_prog.remove(comm)
                 # make the callback call.  TBD only one callback per comm
-                callback = self.watch_for_prog_callback[comm]
-                self.top.doInUser(callback, tid, tid=tid, target=self.cell_name)
+                callback_list = self.watch_for_prog_callback[comm]
+                self.top.doInUser(callback_list, tid, tid=tid, target=self.cell_name)
                 del self.watch_for_prog_callback[comm]
 
 
