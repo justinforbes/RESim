@@ -706,13 +706,23 @@ class GenContextMgr():
         thread_id = None
         if self.top.isWindows(target=self.cell_name):
             ptr = new_addr + self.param.proc_ptr
+            #self.lgr.debug('contextManager changedThread ptr is 0x%x' % ptr)
             phys_block = cpu.iface.processor_info.logical_to_physical(ptr, Sim_Access_Read)
+            #self.lgr.debug('contextManager changedThread phys addr is 0x%x' % phys_block.address)
             proc_addr = self.mem_utils.readPhysPtr(self.cpu, phys_block.address)
+            #self.lgr.debug('contextManager changedThread proc_addr 0x%x' % proc_addr)
             if proc_addr is None:
                 self.lgr.debug('contextManager changedThread proc_addr is None reading from ptr 0x%x' % ptr)
                 return
+            if proc_addr == 0:
+                self.lgr.debug('contextManager changedThread proc_addr is zero reading from ptr 0x%x' % ptr)
+                return
             pid = self.mem_utils.readWord32(cpu, proc_addr + self.param.ts_pid)
+            if pid is None:
+                self.lgr.debug('contextManager changedThread proc_addr bad pid read for proc addr 0x%x' % proc_addr)
             thread_id = self.task_utils.getThreadId(rec=new_addr)
+            if thread_id is None:
+                self.lgr.debug('contextManager changedThread proc_addr bad thread_id read for proc addr 0x%x' % proc_addr)
             if pid is not None and thread_id is not None:
                 tid = '%d-%d' % (pid, thread_id)
             else:
