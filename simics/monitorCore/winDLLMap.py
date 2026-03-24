@@ -276,6 +276,7 @@ class WinDLLMap():
     def mapSection(self, tid, section_handle, load_addr, size):
         # map a section into the section_map
         pid = self.pidFromTID(tid)
+        self.lgr.debug('WinDLL mapSection tid: %s section_handle 0x%x' % (tid, section_handle))
         if pid in self.sections:
             if section_handle in self.sections[pid]:
                 if self.isNew(self.sections[pid][section_handle], pid):
@@ -369,6 +370,8 @@ class WinDLLMap():
                         self.unknown_sections[pid] = []
                     self.unknown_sections[pid].append(load_addr)
                     self.lgr.debug('WinDLLMap mapSection section_handle %d not defined for pid:%s, add unknown section' % (section_handle, pid))
+                else:
+                    self.lgr.debug('WinDLLMap mapSection section_handle %d not defined for pid:%s  ??? what now?' % (section_handle, pid))
         else:
             self.lgr.warning('WinDLLMap mapSection pid:%s not in sections ' % (pid))
 
@@ -558,11 +561,12 @@ class WinDLLMap():
         return retval
 
     def getLoadAddrSize(self, in_fname, tid=None):
-        self.lgr.debug('winDLLMap loadAddr %s tid %s' % (in_fname, tid))
+        self.lgr.debug('winDLLMap loadAddr %s input tid %s' % (in_fname, tid))
         retval = None
         ret_size = None
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
+            self.lgr.debug('winDLLMap getloadAddr tid from curThread is %s' % tid)
         pid = self.pidFromTID(tid)
         if pid is None:
             self.lgr.error('winDLLMap getLoadAddr no pid for %s' % str(pid))
