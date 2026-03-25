@@ -102,26 +102,31 @@ class WinCallExit():
             self.lgr.debug('winCallExit handleExit cell %s tid is zero' % (self.cell_name))
             return False
 
+        eip = self.top.getEIP(self.cpu)
+        callname = self.task_utils.syscallName(exit_info.callnum, exit_info.compat32)
+        if eip == self.param.iretd and not callname.startswith('Wait'):
+            self.lgr.debug('winCallExit handleExit is iretd and we thing %s is not going to do an interrupt return, bail' % callname)
+            return
+     
         if self.dataWatch is not None and not self.dataWatch.disabled:
             self.lgr.debug('winCallExit handleExit restore data watch')
             self.dataWatch.watch()
 
-        eip = self.top.getEIP(self.cpu)
-
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
         ueax = self.mem_utils.getUnsigned(eax)
         eax = self.mem_utils.getSigned(eax)
-        callname = self.task_utils.syscallName(exit_info.callnum, exit_info.compat32)
         if callname is None:
             self.lgr.debug('winCallExit bad callnum %d' % exit_info.callnum)
             return
-        #self.lgr.debug('winCallExit cell %s callnum %d name %s  tid:%s  param1: 0x%x' % (self.cell_name, exit_info.callnum, callname, tid, exit_info.frame['param1']))
+        self.lgr.debug('winCallExit cell %s callnum %d name %s  tid:%s  param1: 0x%x' % (self.cell_name, exit_info.callnum, callname, tid, exit_info.frame['param1']))
         status = "Unknown - not mapped"
         if eax in winNTSTATUS.ntstatus_map:
             status = winNTSTATUS.ntstatus_map[eax]
             trace_msg = 'tid:%s (%s) return from %s with status %s (0x%x)' % (tid, comm, callname, status, eax)
         else:
-            trace_msg = 'tid:%s (%s) return from %s wth eax 0x%x' % (tid, comm, callname, eax)
+            trace_msg = 'tid:%s (%s) return from %s with eax 0x%x (0x%x)' % (tid, comm, callname, eax, ueax)
+            if callname in ['DeviceIoControlFile'] and exit_info.socket_callname is not None:
+                trace_msg = trace_msg + ' ' + exit_info.socket_callname
             if eax == 0x9f000:
                 self.lgr.debug(trace_msg)
                 print(trace_msg)
@@ -140,7 +145,7 @@ class WinCallExit():
             eax = 0
         #if eax in [0x40000003, 0x80000005, 0xc000023f, 0xc00000a3]:
         if eax in [0x40000003, 0x80000005]:
-            # windows has  a lot of garbage ruturn values.
+            # windows has  a lot of garbage ruturn values.  some from drivers
             self.lgr.debug('winSyscall modifying eax back to zero from 0x%x' % eax)
             eax = 0
         
@@ -368,15 +373,27 @@ class WinCallExit():
             trace_msg = trace_msg + ' ' + exit_info.socket_callname
 
             if exit_info.socket_callname in ['BIND', 'GET_SOCK_NAME']:
-                sock_addr = exit_info.retval_addr
-                sock_type = self.getSockType(tid, exit_info.old_fd)
-                sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd, sock_type=sock_type)
+                if exit_info.socket_callname == 'GET_SOCK_NAME':
+                    sock_addr = exit_info.retval_addr
+                    sock_type = self.getSockType(tid, exit_info.old_fd)
+                    sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd, sock_type=sock_type)
+                else:
+                    sock_struct = exit_info.sock_struct
                 if exit_info.sock_struct is not None and sock_struct.dottedPort() != exit_info.sock_struct.dottedPort():
                     rand = ' (random)'
                 else:
                     rand = ''
                 to_string = sock_struct.getString()
                 trace_msg = trace_msg+' '+to_string+rand
+                if exit_info.socket_callname == 'BIND':
+                    my_syscall = exit_info.syscall_instance
+                    if my_syscall is not None:
+                        binders = my_syscall.getBinders()
+                        if binders is not None:
+                            if sock_struct.port is not None:
+                                binders.add(tid, sock_struct.fd, comm, sock_struct.dottedIP(), sock_struct.port)
+                            else:
+                                binders.add(tid, sock_struct.fd, comm, sock_struct.dottedIP(), sock_struct.sa_data)
 
             elif exit_info.socket_callname in ['RECV', 'RECV_DATAGRAM', 'SEND', 'SEND_DATAGRAM']:
                 
@@ -416,6 +433,9 @@ class WinCallExit():
  
             elif exit_info.socket_callname in ['ACCEPT', '12083_ACCEPT']:
                 trace_msg = trace_msg+' bind socket: 0x%x connect socket: 0x%x' % (exit_info.old_fd, exit_info.new_fd)
+                binders = exit_info.syscall_instance.getBinders()
+                if binders is not None:
+                    binders.accept(tid, exit_info.old_fd, exit_info.new_fd)
 
             elif exit_info.socket_callname in ['GET_PEER_NAME']:
                 count = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
@@ -439,6 +459,15 @@ class WinCallExit():
                     trace_msg = trace_msg + " %s fd: 0x%x  bind handle??: 0x%x" % (exit_info.sock_struct.getString(), exit_info.old_fd, bind_handle)
                    
                 self.lgr.debug('winCallExit %s' % (trace_msg)) 
+                connectors = exit_info.syscall_instance.getConnectors()
+                if connectors is not None:
+                    ss = exit_info.sock_struct
+                    if ss.port is not None:
+                        self.lgr.debug('adding connector for tid:%s %s %s %s' % (tid, comm, ss.dottedIP(), str(ss.port)))
+                        connectors.add(tid, ss.fd, comm, ss.dottedIP(), ss.port)
+                    else:
+                        self.lgr.debug('adding connector for tid:%s %s %s' % (tid, comm, ss.sa_data))
+                        connectors.add(tid, ss.fd, comm, '', ss.sa_data)
 
             else:
                 max_count = min(exit_info.count, 100)

@@ -49,7 +49,7 @@ class WinSyscall():
 
     def __init__(self, top, cell_name, cell, param, mem_utils, task_utils, context_manager, traceProcs, sharedSyscall, lgr, 
                    traceMgr, dataWatch, call_list=None, trace = False, flist_in=None, soMap = None, 
-                   call_params=[], connectors=None, stop_on_call=False, targetFS=None, skip_and_mail=True, linger=False,
+                   call_params=[], connectors=None, binders=None, stop_on_call=False, targetFS=None, skip_and_mail=True, linger=False,
                    background=False, name=None, record_fd=False, callback=None, swapper_ok=False, kbuffer=None, no_gui=False): 
         self.lgr = lgr
         self.traceMgr = traceMgr
@@ -76,6 +76,8 @@ class WinSyscall():
         self.param = param
         self.sharedSyscall = sharedSyscall
         self.traceProcs = traceProcs
+        self.binders = binders
+        self.connectors = connectors
         self.stop_hap = None
         self.finish_hap = {}
         self.finish_break = {}
@@ -118,6 +120,7 @@ class WinSyscall():
         self.ignore_progs = context_manager.getIgnoredProgs()
         # see syscall.py
         self.flist_in = flist_in
+        self.no_exit_maze = False
 
         if trace is None and self.traceMgr is not None:
             tf = 'logs/syscall_trace.txt'
@@ -1648,7 +1651,7 @@ class WinSyscall():
             callname = self.task_utils.syscallName(callnum, syscall_info.compat32) 
             word_size = self.getWordSize(tid)
             frame, exit_eip1, exit_eip2, exit_eip3 = self.getExitAddrs(pc, syscall_info, word_size, frame=frames[tid])
-
+            comm = self.task_utils.getCommFromTid(tid)
             exit_info = syscall.ExitInfo(self, self.cpu, tid, comm, callnum, callname, syscall_info.compat32, frame)
             exit_info.retval_addr = frames[tid]['param2']
             exit_info.count = frames[tid]['param3']
@@ -1780,7 +1783,7 @@ class WinSyscall():
             
 
     def checkTimeLoop(self, callname, tid):
-        if self.cpu.architecture.startswith('arm'):
+        if self.cpu.architecture.startswith('arm') or self.no_exit_maze:
             return
         limit = 800
         delta_limit = 0x12a05f200
@@ -2036,7 +2039,7 @@ class WinSyscall():
  
         do_async_io = False
 
-        if op_cmd == 'BIND':
+        if op_cmd in ['BIND']:
             #sock_addr = pdata_addr+self.mem_utils.wordSize(self.cpu)
             if self.os_type == 'WINXP':
                 sock_addr = pdata_addr+10
@@ -2106,7 +2109,7 @@ class WinSyscall():
                 else:
                     handle_addr = pdata_addr+self.mem_utils.wordSize(self.cpu)
                 exit_info.new_fd = self.mem_utils.readWord32(self.cpu, handle_addr)
-            self.lgr.debug('%s pdata_addr 0x%x handle_addr 0x%x' % (op_cmd, pdata_addr, handle_addr))
+                self.lgr.debug('%s pdata_addr 0x%x handle_addr 0x%x' % (op_cmd, pdata_addr, handle_addr))
             trace_msg = trace_msg + " Bind_Handle: 0x%x  Connect_Handle: 0x%x" % (exit_info.old_fd, exit_info.new_fd)
             self.lgr.debug(trace_msg)
             for call_param in self.call_params:
@@ -2379,4 +2382,13 @@ class WinSyscall():
     def rmPendingCall(self, tid):
         if tid in self.pending_calls:
             del self.pending_calls[tid]
+
+    def getBinders(self):
+        return self.binders
+    def getConnectors(self):
+        return self.connectors
+
+    def noExitMaze(self):
+        self.lgr.debug('syscall noExitMaze') 
+        self.no_exit_maze = True
 
