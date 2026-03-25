@@ -688,7 +688,7 @@ class SharedSyscall():
         #self.lgr.debug('sharedSyscall call curThread')
         cpu, comm, tid = self.task_utils.curThread() 
         if cpu is None:
-            self.lgr.error('sharedSyscall exitHap got nothing from curThread')
+            #self.lgr.error('sharedSyscall exitHap got nothing from curThread')
             return
         if self.cpu.architecture == 'ppc32':
             r7 = self.mem_utils.getRegValue(self.cpu, 'r7')
