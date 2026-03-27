@@ -104,6 +104,10 @@ class Kparams():
         # New linux hardcoded jump table
         self.code_jump_table = None
 
+        # kernels that hardcode an offset into code during init
+        self.rand_kernel_offset = None
+        self.rand_kernel_offset_eip = None
+
     def printParams(self):
         print('Kernel parameters:')
         for k in sorted(self.__dict__.keys()):
