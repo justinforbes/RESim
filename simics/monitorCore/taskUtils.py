@@ -789,7 +789,10 @@ class TaskUtils():
         return self.mem_utils
 
     def getExecProgAddr(self, tid, cpu):
-        return self.exec_addrs[tid].prog_addr
+        if tid in self.exec_addrs:
+            return self.exec_addrs[tid].prog_addr
+        else:
+            return None
 
     def modExecParam(self, tid, cpu, dmod):
         for arg_addr in self.exec_addrs[tid].arg_addr_list:
@@ -826,6 +829,8 @@ class TaskUtils():
 
     def getProcArgsFromStack(self, tid, at_enter, cpu):
         ''' NOTE side effect of populating exec_addrs '''
+        prog_string  = None
+        arg_string_list  = None
         # Poor name.  Some come from regs depending on if we are at entry or computed
         if tid is None:
             return None, None
@@ -909,6 +914,7 @@ class TaskUtils():
                     
             if prog_addr == 0:
                 self.lgr.error('getProcArgsFromStack tid: %s esp: 0x%x argv 0x%x prog_addr 0x%x' % (tid, esp, argv, prog_addr))
+        # above is 32 bit
         elif self.cpu.architecture == 'arm64':
             arm64_app = self.mem_utils.arm64App(self.cpu)
             if at_enter:
@@ -949,7 +955,7 @@ class TaskUtils():
             self.lgr.debug('getProcArgsFromStack word size 8')
             if not at_enter and hasattr(self.param, 'code_jump_table') and self.param.code_jump_table is not None:
                 rdi = self.mem_utils.getRegValue(self.cpu, 'rdi')
-                #self.lgr.debug('getProcArgsFromStack has code jump table rdi 0x%x' % rdi)
+                self.lgr.debug('getProcArgsFromStack has code jump table rdi 0x%x' % rdi)
                 sptr = rdi + 0x70
                 # in this scheme, they put the argv addr ptr after the prog string
                 prog_addr = self.mem_utils.readPtr(cpu, sptr)
@@ -986,6 +992,17 @@ class TaskUtils():
                     prog_addr = self.mem_utils.getRegValue(self.cpu, 'rdi')
                     reg_val = self.mem_utils.getRegValue(self.cpu, 'rsi')
                     #self.lgr.debug('getProcArgsFromStack 64 bit code_jump_table prog_addr 0x%x set reg value to rsi 0x%s' % (prog_addr, reg_val)) 
+                    i=0
+                    done = False
+                    while not done and i < 30:
+                        reg_val = reg_val+self.mem_utils.WORD_SIZE
+                        arg_addr = self.mem_utils.readPtr(cpu, reg_val)
+                        if arg_addr != 0:
+                            self.lgr.debug("getProcArgsFromStack adding arg addr %x read from 0x%x" % (arg_addr, reg_val))
+                            arg_addr_list.append(arg_addr)
+                        else:
+                            done = True
+                        i += 1
                 else:
                     if not at_enter and self.param.x86_reg_swap:
                         use_reg = 'rdx'
@@ -994,48 +1011,34 @@ class TaskUtils():
                     reg_num = cpu.iface.int_register.get_number(use_reg)
                     reg_val = cpu.iface.int_register.read(reg_num)
                     prog_addr = self.mem_utils.readPtr(cpu, reg_val)
+                    if prog_addr is None or prog_addr == 0:
+                        return None, None
+                    arg_addr_addr_addr = reg_val + self.mem_utils.WORD_SIZE
+                    self.lgr.debug('getProcArgsFromStack 64 bit no code jump table prog_addr 0x%x reg_val 0x%x arg_addr_addr_addr 0x%x' % (prog_addr, reg_val, arg_addr_addr_addr))
+                    arg_addr_addr = self.mem_utils.readPtr(cpu, arg_addr_addr_addr)
+                    for i in range(20):
+                        arg_addr = self.mem_utils.readPtr(cpu, arg_addr_addr)
+                        if arg_addr == 0 or arg_addr is None:
+                            break
+                        arg_addr_list.append(arg_addr)
+                        self.lgr.debug("getProcArgsFromStack adding arg addr %x read from 0x%x" % (arg_addr, arg_addr_addr))
+                        arg_addr_addr = arg_addr_addr + self.mem_utils.WORD_SIZE
+                    
                 if prog_addr is not None:
                     self.lgr.debug('getProcArgsFromStack 64 bit reg_val is 0x%x prog_addr 0x%x' % (reg_val, prog_addr))
                 else:
                     self.lgr.debug('getProcArgsFromStack 64 bit reg_val is 0x%x prog_addr None' % (reg_val))
-                i=0
-                done = False
-                while not done and i < 30:
-                    reg_val = reg_val+self.mem_utils.WORD_SIZE
-                    arg_addr = self.mem_utils.readPtr(cpu, reg_val)
-                    if arg_addr != 0:
-                        #self.lgr.debug("getProcArgsFromStack adding arg addr %x read from 0x%x" % (arg_addr, reg_val))
-                        arg_addr_list.append(arg_addr)
-                    else:
-                        done = True
-                    i += 1
-        #xaddr = argv + 4*self.mem_utils.WORD_SIZE
-        #arg2_addr = memUtils.readPtr(cpu, xaddr)
-        #print 'arg2 esp is %x sptr at %x  argv %x xaddr %x saddr %x string: %s ' % (esp, sptr, 
-        #     argv, xaddr, saddr, arg2_string)
 
-
-        self.lgr.debug('getProcArgsFromStack prog_addr 0x%x' % prog_addr)
-        self.exec_addrs[tid] = osUtils.execStrings(cpu, tid, arg_addr_list, prog_addr, None)
-        prog_string, arg_string_list = self.readExecParamStrings(tid, cpu)
-        self.exec_addrs[tid].prog_name = prog_string
-        self.exec_addrs[tid].arg_list = arg_string_list
-        #if 'python' in prog_string: 
-        #    SIM_break_simulation('remove this')
-        #self.lgr.debug('getProcArgsFromStack prog_string is %s' % prog_string)
-        #self.lgr.debug('args are %s' % str(arg_string_list))
-        '''
-        if prog_string is None:
-            # program string in unmapped memory; break on it's being read (won't occur until os maps the page)
-            cell = self.cell_config.cell_context[self.cell_name]
-
-            self.prog_read_break[pid] = SIM_breakpoint(cell, Sim_Break_Linear, 
-                Sim_Access_Read, prog_addr, 1, 0)
-            #self.lgr.debug('getProcArgsFromStack set hap on read of param addr %d ' % (pid)) 
-            self.prog_read_hap[pid] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", 
-               self.readExecProg, self.exec_addrs[pid], self.prog_read_break[pid])
-            #SIM_run_alone(SIM_run_command, 'list-breakpoints')
-        '''
+        if prog_addr is not None:
+            self.lgr.debug('getProcArgsFromStack prog_addr 0x%x' % prog_addr)
+            self.exec_addrs[tid] = osUtils.execStrings(cpu, tid, arg_addr_list, prog_addr, None)
+            prog_string, arg_string_list = self.readExecParamStrings(tid, cpu)
+            self.exec_addrs[tid].prog_name = prog_string
+            self.exec_addrs[tid].arg_list = arg_string_list
+            #if 'python' in prog_string: 
+            #    SIM_break_simulation('remove this')
+            #self.lgr.debug('getProcArgsFromStack prog_string is %s' % prog_string)
+            #self.lgr.debug('args are %s' % str(arg_string_list))
 
         return prog_string, arg_string_list
 
@@ -1103,9 +1106,21 @@ class TaskUtils():
                 self.lgr.error('getSyscallEntry code_jump_table missing call for %d' % callnum)
         elif not compat32:
             ''' compute the entry point address for a given syscall using constant extracted from kernel code '''
-            val = callnum * self.mem_utils.WORD_SIZE - self.param.syscall_jump
-            val = self.mem_utils.getUnsigned(val)
+            self.param.syscall_jump = self.param.syscall_jump & 0xFFFFFFFFFFFFFFFF
+            self.lgr.debug('getSyscallEntry jmp 0x%x' % (self.param.syscall_jump))
+            val = (callnum * self.mem_utils.WORD_SIZE) - self.param.syscall_jump
+            self.lgr.debug('getSyscallEntry val after subtract syscall_jump from callnum*8 0x%x' % (val))
+            if val < 0:
+                if abs(val) >= self.param.kernel_base:
+                    val = val * -1
+                else:
+                    val = val & 0xFFFFFFFFFFFFFFFF
+            #val = self.mem_utils.getUnsigned(val)
+            self.lgr.debug('getSyscallEntry val after sign fu 0x%x' % (val))
             entry = self.mem_utils.readPtr(self.cpu, val)
+            if entry is None:
+                self.lgr.error('getSyscallEntry jmp 0x%x callnum 0x%x val 0x%x entry is NONE' % (self.param.syscall_jump, callnum, val))
+               
         else:
             val = callnum * self.mem_utils.WORD_SIZE - self.param.compat_32_jump
             val = self.mem_utils.getUnsigned(val)
