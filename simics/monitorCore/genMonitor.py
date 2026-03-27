@@ -656,8 +656,8 @@ class GenMonitor():
 
     def modeChangeReport(self, want_tid, one, old, new):
         cpu, comm, this_tid = self.task_utils[self.target].curThread() 
-        if want_tid != this_tid:
-            #self.lgr.debug('mode changed wrong tid, wanted %d got %d' % (want_tid, this_tid))
+        if want_tid != -1 and want_tid != this_tid:
+            self.lgr.debug('mode changed wrong tid, wanted %s got %s' % (want_tid, this_tid))
             return
         if new == Sim_CPU_Mode_Supervisor:
             new_mode = 'kernel'
@@ -686,12 +686,12 @@ class GenMonitor():
                 self.lgr.debug('modeChangeReport returned to user from eip 0x%x %s reason: %s' % (eip, instruct[1], reason))
             elif new_mode == 'kernel':
                 self.lgr.debug('modeChangeReport entering kernel from eip 0x%x %s ' % (eip, instruct[1]))
+                SIM_break_simulation('mode changed')
             else:
                 self.lgr.debug('modeChangeReport entering hypervisor from eip 0x%x %s ' % (eip, instruct[1]))
                 
         else:
             self.lgr.debug('modeChangeReport new mode: %s  eip 0x%x eax 0x%x  Failed getting phys for eip' % (new_mode, eip, callnum))
-
 
         #SIM_break_simulation('mode changed')
 
@@ -1890,7 +1890,7 @@ class GenMonitor():
                     self.lgr.debug('toProc want new process %s, run until execve cycles now 0x%x' % (proc, cpu.cycles))
                 else:
                     self.lgr.debug('toProc no process %s found, run until execve' % proc)
-                self.toExecve(prog=proc, flist=[], binary=binary, any_exec=True)
+                self.toExecve(prog=proc, flist=[], binary=binary, any_exec=True, run=run)
 
         
     def debugProc(self, proc, final_fun=None, pre_fun=None, track_threads=True, new=False, not_to_user=False):
@@ -4616,12 +4616,14 @@ class GenMonitor():
             for tid in plist:
                 print(tid)
         
-    def reportMode(self, stop=True):
+    def reportMode(self, stop=True, any=False):
         self.rmDebugWarnHap()
         tid, cpu = self.context_manager[self.target].getDebugTid() 
         if tid is None:
             cpu, comm, tid = self.task_utils[self.target].curThread() 
         
+        if any:
+            tid = -1
         self.lgr.debug('reportMode for tid:%s' % tid)
         self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChangeReport, tid)
         if stop:
