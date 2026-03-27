@@ -41,6 +41,7 @@ from resimHaps import *
 import resimSimicsUtils
 from resimSimicsUtils import rprint
 import openFlags
+import linuxConstants
 sys.path.append('/usr/local/lib/python2.7/dist-packages')
 sys.path.append('/usr/local/lib/python3.6/dist-packages')
 sys.path.append('/usr/lib/python3/dist-packages')
@@ -1177,8 +1178,8 @@ class Syscall():
             call_info = SyscallInfo(cpu, tid, False, None)
             self.lgr.debug('parseExecve tid:%s prog string missing, set break on 0x%x' % (tid, prog_addr))
             if prog_addr == 0:
-                self.lgr.error('parseExecve zero prog_addr tid:%s' % tid)
-                SIM_break_simulation('parseExecve zero prog_addr tid:%s' % tid)
+                self.lgr.warning('parseExecve zero prog_addr tid:%s' % tid)
+                #SIM_break_simulation('parseExecve zero prog_addr tid:%s' % tid)
             if tid in tid_list and tid != db_tid:
                 context = self.context_manager.getDefaultContext()
             else:
@@ -2396,6 +2397,11 @@ class Syscall():
             fd = resimSimicsUtils.fdString(exit_info.old_fd)
             ida_msg = '%s tid:%s (%s) FD: %s file: %s return buffer: 0x%x' % (callname, tid, comm, fd, exit_info.fname, retval_addr)
             self.checkDmod(callname, exit_info, comm)
+        elif callname.startswith('access'):
+            fname_addr = frame['param1']
+            fname = self.mem_utils.readString(self.cpu, fname_addr, 256)
+            mode = frame['param2']
+            ida_msg = '%s tid:%s (%s) file: %s mode: 0x%x' % (callname, tid, comm, fname, mode)
         elif callname.startswith('faccessat'):
             exit_info.old_fd = frame['param1']
             fname_addr = frame['param2']
@@ -2522,6 +2528,15 @@ class Syscall():
             exit_info.fname = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
             exit_info.flags = frame['param3']
             ida_msg = '%s tid:%s (%s) FD: %d path: %s mask: 0x%x' % (callname, tid, comm, exit_info.old_fd, exit_info.fname, exit_info.flags) 
+        elif callname == "arch_prctl":
+            exit_info.mode = frame['param1']
+            code_string = linuxConstants.getArchPrtctName(exit_info.mode)
+            if code_string.startswith('ARCH_GET'):
+                exit_info.retval_addr = frame['param2']
+                ida_msg = '%s tid:%s (%s) code: %s' % (callname, tid, comm, code_string)
+            else:
+                value = frame['param2']
+                ida_msg = '%s tid:%s (%s) code: %s value: 0x%x' % (callname, tid, comm, code_string, value)
 
         else:
             ida_msg = '%s %s   tid:%s (%s) cycle:0x%x\n' % (callname, taskUtils.stringFromFrame(frame), tid, comm, self.cpu.cycles)

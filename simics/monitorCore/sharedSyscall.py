@@ -31,6 +31,7 @@ import allWrite
 import syscall
 import resimUtils
 import winCallExit
+import linuxConstants
 import re
 from resimHaps import *
 '''
@@ -1548,6 +1549,13 @@ class SharedSyscall():
                 trace_msg = trace_msg+' from parent, new tid:%d\n' % eax
             else:
                 trace_msg = trace_msg+' ??? \n' 
+        elif callname == "arch_prctl":
+            code_string = linuxConstants.getArchPrtctName(exit_info.mode)
+            if code_string.startswith('ARCH_GET'):
+                result = self.mem_utils.readWord32(exit_info.retval_addr)
+                trace_msg = trace_msg+' %s result: 0x%x code: 0x%x' % (code_string, result, ueax)
+            else:
+                trace_msg = trace_msg+' %s code: 0x%x' % (ueax)
 
         else:
             trace_msg = trace_msg+('code: 0x%x\n' % (ueax))
