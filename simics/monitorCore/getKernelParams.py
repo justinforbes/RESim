@@ -80,6 +80,8 @@ class GetKernelParams():
         self.hack_stop = False
         self.run_from_snap = run_from_snap
         self.only_64 = False
+        self.rand_kernel_offset = None
+        self.rand_kernel_offset_eip = None
 
         if self.os_type is None:
             self.os_type = 'LINUX32'
@@ -1322,14 +1324,29 @@ class GetKernelParams():
                 prefix2 = 'mov rax,qword ptr [rax*8-'
             prev_instruct = None
             prev_eip = None
+            instruct_count = 0
+            eax = self.mem_utils.getRegValue(self.cpu, 'eax')
+            self.lgr.debug('stepCompute x86, rax is 0x%x' % eax)
             while True:
                 SIM_run_command('si -q')
+                instruct_count += 1
                 eip = self.mem_utils.getRegValue(self.cpu, 'eip')
                 if not self.mem_utils.isKernel(eip):
                     self.lgr.error('stepCompute returned to user space')
                     return
                 instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
                 self.lgr.debug('eip: 0x%x instruct: %s' % (eip, instruct[1]))
+                if instruct_count < 20 and instruct[1].startswith('mov rdi,0x'):
+                    op2, op1 = decode.getOperands(instruct[1])
+                    self.param.rand_kernel_offset_eip = eip
+                    self.param.rand_kernel_offset = int(op2, 16)
+                    self.lgr.debug('Found random kernel code offset 0x%x at eip of 0x%x' % (self.param.rand_kernel_offset, self.param.rand_kernel_offset_eip))
+                if instruct[1].startswith('mov rdi, rsi') and  prev_instruct.startswith('jne 0x'): 
+                    # hack catches false kernel enter????
+                    self.lgr.debug('stepCompute found jump suggesting we are not a good system call, start over')
+                    self.findCompute()
+                    return
+                
                 if instruct[1].startswith(prefix) or instruct[1].startswith(prefix1) or instruct[1].startswith(prefix2):
                     if compat32:
                         self.param.compat_32_compute = eip
@@ -1339,7 +1356,7 @@ class GetKernelParams():
                     else:
                         self.param.syscall_compute = eip
                         print(instruct[1])
-                        self.param.syscall_jump = int(instruct[1].split('-')[1][:-1], 16)
+                        self.param.syscall_jump = int(instruct[1].split('-')[1][:-1], 16) & 0xFFFFFFFFFFFFFFFF
                         self.lgr.debug('got compute at count %d 0x%x jump constant is 0x%x  %s' % (count, eip, self.param.syscall_jump, instruct[1]))
                     break
                 elif instruct[1].startswith('je ') and prev_instruct.startswith('cmp edx'):
