@@ -75,8 +75,13 @@ class TrackThreads():
 
     def setExecveBreaks(self, arm64_app=None):
         execve_callnum = self.task_utils.syscallNumber('execve', self.compat32, arm64_app=arm64_app)
+        self.lgr.debug('TrackThreads setExecveBreaks execve_callnum is %d' % execve_callnum)
         if execve_callnum is not None:
             execve_entry = self.task_utils.getSyscallEntry(execve_callnum, self.compat32, arm64_app=arm64_app)
+            if execve_entry is None:
+                self.lgr.error('TrackThreads setExecveBreaks execve_entry back as None')
+                SIM_break_simulation('remove this')
+                return
             execve_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, execve_entry, 1, 0)
             hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.execveHap, 'nothing', execve_break, 'trackThreads execve')
             self.execve_hap.append(hap)
@@ -220,8 +225,9 @@ class TrackThreads():
             call_info = syscall.SyscallInfo(cpu, tid, None, None)
             self.lgr.debug('trackThreads parseExecve prog string missing, set break on 0x%x' % prog_addr)
             if prog_addr == 0:
-                self.lgr.error('trackThreads parseExecve zero prog_addr tid:%s' % tid)
-                SIM_break_simulation('trackThreads parseExecve zero prog_addr tid:%s' % tid)
+                self.lgr.warning('trackThreads parseExecve zero prog_addr tid:%s' % tid)
+                #SIM_break_simulation('trackThreads parseExecve zero prog_addr tid:%s' % tid)
+                return
             self.finish_break[tid] = SIM_breakpoint(cpu.current_context, Sim_Break_Linear, Sim_Access_Read, prog_addr, 1, 0)
             self.finish_hap[tid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.finishParseExecve, call_info, self.finish_break[tid])
             return
