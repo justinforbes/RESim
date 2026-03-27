@@ -28,6 +28,7 @@ import pageUtilsPPC32
 import json
 import sys
 import struct
+import decode
 import traceback
 from simics import *
 MACHINE_WORD_SIZE = 8
@@ -1094,7 +1095,6 @@ class MemUtils():
             new_xs_base = cpu.ia32_gs_base
             self.param.gs_base = new_xs_base
             self.lgr.debug('memUtils adjustParam current ia32_gs_base 0x%x  param value 0x%x' % (new_xs_base, param_xs_base))
-   
 
         delta = param_xs_base - new_xs_base
         if delta == 0:
@@ -1106,9 +1106,17 @@ class MemUtils():
         #    self.param.current_task = self.param.current_task + delta
         #else:
         #    self.param.current_task = self.param.current_task + abs(delta)
+        kernel_offset = False
+        if hasattr(self.param, 'rand_kernel_offset') and self.param.rand_kernel_offset is not None:
+            # random kernel code (kernel_offset) sysenter is the same, but other code is offset by constant
+            kernel_offset = True
+            instruct = SIM_disassemble_address(cpu, self.param.rand_kernel_offset_eip, 1, 0)
+            op2, op1 = decode.getOperands(instruct[1])
+            this_kernel_offset = int(op2, 16)
+            kernel_offset_delta = this_kernel_offset - self.param.rand_kernel_offset
 
-        if self.param.sysenter is not None:
-            self.lgr.debug('memUtils adjustParamsysenter was to 0x%x' % self.param.sysenter)
+        if self.param.sysenter is not None and not kernel_offset:
+            self.lgr.debug('memUtils adjustParam sysenter was to 0x%x' % self.param.sysenter)
             if self.WORD_SIZE == 4:
                 self.param.sysenter = self.param.sysenter + delta
             else:
@@ -1116,8 +1124,10 @@ class MemUtils():
                 # TBD remove if
                 #self.param.sysenter = self.param.sysenter + delta
                 pass
-            self.lgr.debug('memUtils adjustParamsysenter adjusted to 0x%x' % self.param.sysenter)
-        if self.param.sysexit is not None:
+            self.lgr.debug('memUtils adjustParam sysenter adjusted to 0x%x' % self.param.sysenter)
+
+        if self.param.sysexit is not None and not kernel_offset:
+            # both positive?
             if self.WORD_SIZE == 4:
                 self.param.sysexit = self.param.sysexit + delta
             else:
@@ -1127,9 +1137,15 @@ class MemUtils():
             if self.WORD_SIZE == 4:
                 self.param.sysret64 = self.param.sysret64 + delta
             else:
-                self.lgr.debug('memUtils adjustParamsysret64 was 0x%x' % self.param.sysret64)
-                self.param.sysret64 = self.param.sysret64 - delta
-                self.lgr.debug('memUtils adjustParamsysret64 now 0x%x' % self.param.sysret64)
+                if kernel_offset:
+                    self.param.sysret64 = self.param.sysret64 + kernel_offset_delta
+                    self.lgr.debug('memUtils adjustParam sysret64 was 0x%x this_kernel_offset 0x%x  delta 0x%x' % (self.param.sysret64,
+                          this_kernel_offset, kernel_offset_delta))
+                    
+                else:
+                    self.lgr.debug('memUtils adjustParam sysret64 was 0x%x' % self.param.sysret64)
+                    self.param.sysret64 = self.param.sysret64 - delta
+                    self.lgr.debug('memUtils adjustParam sysret64 now 0x%x' % self.param.sysret64)
 
         if self.WORD_SIZE == 4:
             if self.param.iretd is not None:
@@ -1147,18 +1163,31 @@ class MemUtils():
                 self.lgr.debug('memUtils adjustParam syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
         else:
             if self.param.iretd is not None:
-                self.param.iretd = self.param.iretd + delta
-            self.lgr.debug('memUtils adjustParam page_fault was 0x%x' % self.param.page_fault)
-            self.param.page_fault = self.param.page_fault - delta
-            self.lgr.debug('memUtils adjustParam page_fault now 0x%x' % self.param.page_fault)
+                if kernel_offset:
+                    self.param.iretd = self.param.iretd + kernel_offset_delta
+                else:
+                    self.param.iretd = self.param.iretd + delta
+            if not kernel_offset:
+                self.lgr.debug('memUtils adjustParam page_fault was 0x%x' % self.param.page_fault)
+                self.param.page_fault = self.param.page_fault - delta
+                self.lgr.debug('memUtils adjustParam page_fault now 0x%x' % self.param.page_fault)
+            else:
+                self.lgr.debug('memUtils adjustParam page_fault per kernel offset was 0x%x' % self.param.page_fault)
+                self.param.page_fault = self.param.page_fault + kernel_offset_delta
+                self.lgr.debug('memUtils adjustParam page_fault per kernel offset now 0x%x' % self.param.page_fault)
 
             self.param.syscall_compute = self.param.syscall_compute - delta
 
             if self.param.syscall_jump is not None:
-                ''' This value seems to get adjusted the other way.  TBD why? '''
-                self.lgr.debug('memUtils adjustParam syscall_jump was 0x%x' % self.param.syscall_jump)
-                self.param.syscall_jump = self.param.syscall_jump - delta
-                self.lgr.debug('memUtils adjustParam syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
+                if not kernel_offset:
+                    ''' This value sometimes seems to get adjusted the other way.  TBD why? '''
+                    self.lgr.debug('memUtils adjustParam syscall_jump was 0x%x' % self.param.syscall_jump)
+                    self.param.syscall_jump = self.param.syscall_jump - delta
+                    self.lgr.debug('memUtils adjustParam syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
+                else:
+                    self.lgr.debug('memUtils adjustParam syscall_jump for kernel offset was 0x%x' % self.param.syscall_jump)
+                    self.param.syscall_jump = self.param.syscall_jump - kernel_offset_delta
+                    self.lgr.debug('memUtils adjustParam syscall_jump kernel offset adjusted to 0x%x' % self.param.syscall_jump)
             if self.param.syscall64_jump is not None:
                 self.lgr.debug('memUtils adjustParam syscall_jump was 0x%x' % self.param.syscall64_jump)
                 self.param.syscall_jump = self.param.syscall64_jump - delta
