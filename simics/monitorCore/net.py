@@ -306,7 +306,7 @@ class Msghdr():
         else:
             msg_name = ''
             if self.msg_namelen > 0:
-                if self.msg_namelen > 100:
+                if self.msg_namelen > 150:
                     self.lgr.error('net MsgHeader getString msg_namelen seems large %d' % self.msg_namelen)
                 else:
                     msg_name = self.mem_utils.readBytes(self.cpu, self.msg_name, self.msg_namelen).hex()
