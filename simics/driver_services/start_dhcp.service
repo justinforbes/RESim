@@ -1,0 +1,13 @@
+[Unit]
+Description=Start dhcpserver.py
+Wants=network-online.target
+After=network.target
+After=network-online.target
+StartLimitIntervalSec=0
+[Service]
+Type=simple
+EnvironmentFile=/etc/dhcp.conf
+ExecStart=/tmp/dhcpserver.py $ARG1 $ARG2
+
+[Install]
+WantedBy=multiuser.target

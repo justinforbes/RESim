@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+import socket
+from dnslib import DNSRecord, QTYPE, RR, A
+from dnslib.server import DNSHandler, DNSLogger
+
+# 1. Hardcoded Local JSON Mapping (Domain -> IP)
+# Note: Domain names must end with a dot (.)
+DNS_ZONE = {
+    "example.local.": "127.0.0.1",
+    "api.k4modbility.com.": "10.10.0.140",
+    "my-app.dev.": "127.0.0.1",
+}
+
+class CustomResolver:
+    def resolve(self, request, handler):
+        reply = request.reply()
+        qname = str(request.q.qname)
+        qtype = QTYPE[request.q.qtype]
+
+        print(f"Received query: {qname} [{qtype}]")
+
+        # 2. Check if domain exists in our JSON
+        if qname in DNS_ZONE and qtype == 'A':
+            ip = DNS_ZONE[qname]
+            reply.add_answer(RR(qname, QTYPE.A, rdata=A(ip), ttl=60))
+            print(f"Resolved {qname} to {ip}")
+        else:
+            # Return NXDOMAIN if not found
+            reply.header.rcode = 3 
+            print(f"Domain not found: {qname}")
+
+        return reply
+
+def main():
+    port = 53 
+    host = '0.0.0.0'
+
+    resolver = CustomResolver()
+    
+    # 3. Setup UDP Server
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind((host, port))
+    
+    print(f"DNS Server listening on {host}:{port}...")
+
+    try:
+        while True:
+            data, addr = sock.recvfrom(512)
+            request = DNSRecord.parse(data)
+            reply = resolver.resolve(request, None)
+            sock.sendto(reply.pack(), addr)
+    except KeyboardInterrupt:
+        print("Server stopped.")
+        sock.close()
+
+if __name__ == "__main__":
+    main()
+

@@ -1,0 +1,13 @@
+[Unit]
+Description=Start dnsserver.py
+Wants=network-online.target
+After=network.target
+After=network-online.target
+StartLimitIntervalSec=0
+[Service]
+Type=simple
+#EnvironmentFile=/etc/dhcp.conf
+ExecStart=/tmp/dnsserver.py 
+
+[Install]
+WantedBy=multiuser.target
