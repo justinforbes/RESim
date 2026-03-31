@@ -912,11 +912,14 @@ class SharedSyscall():
                     self.lgr.debug('sharedSyscall %s no fname_addr, debug starting in kernel???' % callname)
                     return
                 if tid != '1':
-                    self.lgr.error('fname is None? in exit from open tid:%s fname addr was 0x%x' % (tid, exit_info.fname_addr))
-                    SIM_break_simulation('fname is none on exit of open')
+                    self.lgr.warning('fname is None? in exit from open tid:%s fname addr was 0x%x' % (tid, exit_info.fname_addr))
+                    #SIM_break_simulation('fname is none on exit of open')
                 else:
-                    self.lgr.debug('fname is None? in exit from open tid:%s fname addr was 0x%x' % (tid, exit_info.fname_addr))
-                exit_info.fname = 'unknown'
+                    self.lgr.debug('fname is None? in exit tid 1 from open tid:%s fname addr was 0x%x' % (tid, exit_info.fname_addr))
+                exit_info.fname = self.mem_utils.readString(exit_info.cpu, exit_info.fname_addr, 256)
+                if exit_info.fname is None:
+                    exit_info.fname = 'unknown'
+                SIM_break_simulation('remove this '+exit_info.fname)
             trace_msg = trace_msg+('FD: %d file: %s flags: 0%o mode: 0x%x eax: 0x%x\n' % (eax, 
                    exit_info.fname, exit_info.flags, exit_info.mode, eax))
             #self.lgr.debug('sharedSyscall exitHap return from open tid:%s (%s) FD: %d file: %s flags: 0%o mode: 0x%x eax: 0x%x' % (tid, comm, 
@@ -1061,7 +1064,7 @@ class SharedSyscall():
                                 and self.dataWatch is not None \
                                 and type(exit_info.matched_param.match_param) is int and exit_info.matched_param.match_param == exit_info.old_fd:
                     self.lgr.debug('sharedSyscall maybe dataWatch, check count')
-                    if not self.checkCount(eax, exit_info, trace_msg, s):
+                    if eax > 0 and not self.checkCount(eax, exit_info, trace_msg, s):
                         self.dataWatch.setRange(exit_info.retval_addr, eax, msg=trace_msg, max_len=exit_info.count, fd=exit_info.old_fd, data_stream=True, kbuffer=self.kbuffer)
                 # TBD make a config parameter
                 if eax < 16000:
@@ -1555,7 +1558,7 @@ class SharedSyscall():
                 result = self.mem_utils.readWord32(exit_info.retval_addr)
                 trace_msg = trace_msg+' %s result: 0x%x code: 0x%x' % (code_string, result, ueax)
             else:
-                trace_msg = trace_msg+' %s code: 0x%x' % (ueax)
+                trace_msg = trace_msg+' %s code: 0x%x' % (callname, ueax)
 
         else:
             trace_msg = trace_msg+('code: 0x%x\n' % (ueax))
