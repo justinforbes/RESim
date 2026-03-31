@@ -223,6 +223,10 @@ class TrackThreads():
             ''' prog string not in ram, break on kernel read of the address and then read it '''
             prog_addr = self.task_utils.getExecProgAddr(tid, cpu)
             call_info = syscall.SyscallInfo(cpu, tid, None, None)
+            if prog_addr is None:
+                self.lgr.warning('trackThreads parseExecve None prog_addr tid:%s' % tid)
+                #SIM_break_simulation('trackThreads parseExecve zero prog_addr tid:%s' % tid)
+                return
             self.lgr.debug('trackThreads parseExecve prog string missing, set break on 0x%x' % prog_addr)
             if prog_addr == 0:
                 self.lgr.warning('trackThreads parseExecve zero prog_addr tid:%s' % tid)
