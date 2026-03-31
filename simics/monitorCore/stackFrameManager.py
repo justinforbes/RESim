@@ -52,12 +52,15 @@ class StackFrameManager():
         self.best_stack_base = {}
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
+        self.use_bp = True
         ignore_bp = self.top.getCompDict(cell_name, 'IGNORE_BP')
         if resimUtils.yesNoTrueFalse(ignore_bp):
             self.use_bp = False
             self.lgr.debug('stackFrameManager will ignore bp')
         else:
-            self.use_bp = True
+            if mem_utils.wordSize(cpu) == 8:
+                self.use_bp = False
+        self.lgr.debug('stackFrameManager word size %d use_bp %r' % (self.mem_utils.wordSize(cpu), self.use_bp))
 
 
     def stackTrace(self, verbose=False, in_tid=None, use_cache=True, stop_after_clib=False):
