@@ -3651,7 +3651,7 @@ class GenMonitor():
             cname = 'CONNECT'
             call = ['CONNECT']
         else:
-            cname = 'CONNECT'
+            cname = 'connect'
             call = self.task_utils[self.target].socketCallName('connect', self.is_compat32)
         call_params = syscall.CallParams('runToConnect', cname, addr, break_simulation=True, proc=proc)        
         call_params.nth = nth
@@ -5252,14 +5252,18 @@ class GenMonitor():
 
     def pageInfo(self, addr, quiet=False, cr3=None):
         cpu = self.cell_config.cpuFromCell(self.target)
-        if cr3 is None:
+        if cr3 is None and addr >= self.param[self.target].kernel_base:
             use_cr3 = self.mem_utils[self.target].getKernelSavedCR3()
+            if use_cr3 is not None:
+                self.lgr.debug('pageInfo using saved kernel cr3 of 0x%x' % use_cr3)
         else:
             use_cr3 = cr3
         task_cr3 = memUtils.getCR3(cpu)
         print('current task cr3 0x%x' % (task_cr3))
+        self.lgr.debug('pageInfo current task cr3 0x%x' % (task_cr3))
         if use_cr3 is not None:
-            print('Using cr3 0x%x' % (use_cr3))
+            print('pageInfo Using cr3 0x%x' % (use_cr3))
+            self.lgr.debug('pageInfo Using cr3 0x%x' % (use_cr3))
 
         ptable_info = pageUtils.findPageTable(cpu, addr, self.lgr, force_cr3=use_cr3)
         if not quiet:
@@ -7189,12 +7193,6 @@ class GenMonitor():
             print('Current snapshot looks like a prep inject.  Exiting.')
             self.lgr.debug('Current snapshot looks like a prep inject, bail.')
             self.quit()
-
-    def adjustParams(self):
-        for cell_name in self.cell_config.cell_context:
-            if cell_name in self.mem_utils:
-                cpu = self.cell_config.cpuFromCell(cell_name)
-                self.mem_utils[cell_name].adjustParam(cpu)
 
     def doInUser(self, callback, param, tid=None, target=None):
         if target is None:
