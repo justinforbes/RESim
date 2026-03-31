@@ -1314,6 +1314,10 @@ class GetKernelParams():
             SIM_run_alone(self.setPageFaultHap, None)
             # Above is Windows
         else:
+            cmd = 'get-msr %s 0x176' % self.cpu.name
+            dumb, value = cli.quiet_run_command(cmd)
+            self.param.msr_176 = int(value,16)
+            self.lgr.debug('stepCompute x86, msr_176 is 0x%x' % self.param.msr_176)
             ''' find where we do the syscall jump table computation '''
             prefix = 'call dword ptr [eax*4'
             prefix1 = 'mov eax,dword ptr [eax*4'
