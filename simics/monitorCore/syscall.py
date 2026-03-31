@@ -871,9 +871,8 @@ class Syscall():
         else:
             #ida_msg = '%s flags: 0%o  mode: %s  fname_addr 0x%x filename: %s   tid:%s (%s)' % (callname, flags, oct(mode), fname_addr, fname, tid, comm)
             ida_msg = '%s flags: %s mode: %s  fname_addr 0x%x filename: %s   tid:%s (%s)' % (callname, flag_string, oct(mode), fname_addr, fname, tid, comm)
-        #self.lgr.debug('parseOpen set ida message to %s' % ida_msg)
-        #self.lgr.debug('parseOpen params: taskUtils.stringFromFrame(frame))
-
+        self.lgr.debug('parseOpen set ida message to %s' % ida_msg)
+        self.lgr.debug('parseOpen params: %s' % taskUtils.stringFromFrame(frame))
         self.context_manager.setIdaMessage(ida_msg)
         #if fname is None:
         #    SIM_break_simulation('fname zip')
@@ -906,7 +905,7 @@ class Syscall():
         physical = memory.physical_address
         #self.lgr.debug('fnamePage phys 0x%x len %d  type %s' % (physical, length, type_name))
         if length == 8:
-            if op_type is Sim_Trans_Store:
+            if op_type == Sim_Trans_Store:
                 value = memUtils.memoryValue(self.cpu, memory)
             else:
                 self.lgr.error('syscall fnamePage unexpected op_type %d' % op_type)
@@ -943,7 +942,7 @@ class Syscall():
         physical = memory.physical_address
         self.lgr.debug('fnamePage phys 0x%x len %d  type %s' % (physical, length, type_name))
         if length == 8:
-            if op_type is Sim_Trans_Store:
+            if op_type == Sim_Trans_Store:
                 value = memUtils.memoryValue(self.cpu, memory)
             else:
                 self.lgr.error('syscall fnamePage unexpected op_type %d' % op_type)
@@ -1703,7 +1702,7 @@ class Syscall():
                         got_one = True
                 elif call_param.match_param.__class__.__name__ == 'Dmod' and len(self.call_params) == 1:
                     if not call_param.match_param.commMatch(comm):
-                        self.lgr.debug('syscall syscallParse, Dmod %s does not match comm %s, return' % (str(call_param.match_param.comm), comm))
+                        #self.lgr.debug('syscall syscallParse, Dmod %s does not match comm %s, return' % (str(call_param.match_param.comm), comm))
                         #self.lgr.debug('syscall syscallParse, Dmod does not match comm %s, return' % (comm))
                         bail_if_not_got = True
                     elif call_param.match_param is not None:
@@ -1748,19 +1747,16 @@ class Syscall():
                     self.finish_break[tid] = SIM_breakpoint(cpu.current_context, Sim_Break_Linear, Sim_Access_Read, exit_info.fname_addr, 1, 0)
                     self.finish_hap[tid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.finishParseOpen, exit_info, self.finish_break[tid])
                 else:
-                    if pageUtils.isIA32E(cpu):
-                        ptable_info = pageUtils.findPageTableIA32E(cpu, exit_info.fname_addr, self.lgr)
-                        if not ptable_info.ptable_exists:
-                            self.lgr.debug('syscallParse, open tid:%s filename not yet here... set ptable break at 0x%x ' % (tid, ptable_info.ptable_addr))
-                            self.finish_break[tid] = SIM_breakpoint(cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, ptable_info.ptable_addr, 1, 0)
-                            self.finish_hap_table[tid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.fnameTable, exit_info, self.finish_break[tid])
-                        elif not ptable_info.page_exists:
-                            self.lgr.debug('syscallParse, open tid:%s filename not yet here... set page break at 0x%x ' % (tid, ptable_info.page_base_addr))
-                            self.finish_break[tid] = SIM_breakpoint(cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, ptable_info.page_base_addr, 1, 0)
-                            self.finish_hap_page[tid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.fnamePage, exit_info, self.finish_break[tid])
+                    ptable_info = pageUtils.findPageTable(cpu, exit_info.fname_addr, self.lgr)
+                    if not ptable_info.ptable_exists:
+                        self.lgr.debug('syscallParse, open tid:%s filename from addr 0x%x not yet here... set ptable break at 0x%x ' % (tid, exit_info.fname_addr, ptable_info.ptable_addr))
+                        self.finish_break[tid] = SIM_breakpoint(cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, ptable_info.ptable_addr, 1, 0)
+                        self.finish_hap_table[tid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.fnameTable, exit_info, self.finish_break[tid])
+                    elif not ptable_info.page_exists:
+                        self.lgr.debug('syscallParse, open tid:%s filename from addr 0x%x not yet here... set page break at 0x%x ' % (tid, exit_info.fname_addr, ptable_info.page_base_addr))
+                        self.finish_break[tid] = SIM_breakpoint(cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, ptable_info.page_base_addr, 1, 0)
+                        self.finish_hap_page[tid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.fnamePage, exit_info, self.finish_break[tid])
                         
-                #SIM_break_simulation('fname is none...')
-            #elif exit_info.fname is not None:
             if True:
                 #self.lgr.debug('syscallParse got fname %s has %d call_params, ida_msg is %s' % (exit_info.fname, len(self.call_params), ida_msg))
                 for call_param in self.call_params:
@@ -2853,6 +2849,9 @@ class Syscall():
         if self.syscall_info.callnum is None:
            # tracing all
            callnum = self.mem_utils.getCallNum(cpu)
+           if callnum is None:
+               self.lgr.debug('syscallHap tid:%s traceAll, callnum is None?' % tid)
+               return
         else:
            arm64_app = None
            if self.cpu.architecture == 'arm64':
@@ -2860,6 +2859,9 @@ class Syscall():
            callnum = self.syscall_info.getCall(break_eip, arm64_app)
 
         frame, exit_eip1, exit_eip2, exit_eip3 = self.getExitAddrs(break_eip, self.syscall_info)
+        if frame is None or frame['param1'] is None:
+            self.lgr.debug('syscallHap frame or parm1 is none?  %s' % str(frame))
+            return
         if self.syscall_info.callnum is None:
            # tracing all
            tracing_all = True
