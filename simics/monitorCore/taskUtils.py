@@ -953,7 +953,8 @@ class TaskUtils():
         else:
             # 64 bit 86
             self.lgr.debug('getProcArgsFromStack word size 8')
-            if not at_enter and hasattr(self.param, 'code_jump_table') and self.param.code_jump_table is not None:
+            if not at_enter:
+            #if not at_enter and hasattr(self.param, 'code_jump_table') and self.param.code_jump_table is not None:
                 rdi = self.mem_utils.getRegValue(self.cpu, 'rdi')
                 self.lgr.debug('getProcArgsFromStack has code jump table rdi 0x%x' % rdi)
                 sptr = rdi + 0x70
@@ -1107,16 +1108,16 @@ class TaskUtils():
         elif not compat32:
             ''' compute the entry point address for a given syscall using constant extracted from kernel code '''
             self.param.syscall_jump = self.param.syscall_jump & 0xFFFFFFFFFFFFFFFF
-            self.lgr.debug('getSyscallEntry jmp 0x%x' % (self.param.syscall_jump))
+            #self.lgr.debug('getSyscallEntry jmp 0x%x' % (self.param.syscall_jump))
             val = (callnum * self.mem_utils.WORD_SIZE) - self.param.syscall_jump
-            self.lgr.debug('getSyscallEntry val after subtract syscall_jump from callnum*8 0x%x' % (val))
+            #self.lgr.debug('getSyscallEntry val after subtract syscall_jump from callnum*8 0x%x' % (val))
             if val < 0:
                 if abs(val) >= self.param.kernel_base:
                     val = val * -1
                 else:
                     val = val & 0xFFFFFFFFFFFFFFFF
             #val = self.mem_utils.getUnsigned(val)
-            self.lgr.debug('getSyscallEntry val after sign fu 0x%x' % (val))
+            #self.lgr.debug('getSyscallEntry val after sign fu 0x%x' % (val))
             entry = self.mem_utils.readPtr(self.cpu, val)
             if entry is None:
                 self.lgr.error('getSyscallEntry jmp 0x%x callnum 0x%x val 0x%x entry is NONE' % (self.param.syscall_jump, callnum, val))
@@ -1257,9 +1258,9 @@ class TaskUtils():
             if self.mem_utils.WORD_SIZE == 8 and not compat32:
                 map_id = 'x86_64'
                 #self.lgr.debug('taskUtils frameFromRegs pc 0x%x sysenter 0x%x' % (frame['pc'], self.param.sysenter))
-                if self.param.x86_reg_swap and frame['pc'] != self.param.sysenter:
-                    self.lgr.debug('taskUtils frameFromRegs is reg_swap and sysenter')
-                    # At sysenter
+                #if True: 
+                if frame['pc'] != self.param.sysenter:
+                    # at computed entry
                     map_id = 'x86_64swap'
                     # TBD Very odd way to load parameters.
                     offset = 0x70
@@ -1272,12 +1273,13 @@ class TaskUtils():
                         else:
                             addr = addr - 8
                 else:
+                    # at sysenter
                     if frame['pc'] != self.param.sysenter:
-                        self.lgr.debug('taskUtils frameFromRegs x86-64 not at entry use regs?')
+                        #self.lgr.debug('taskUtils frameFromRegs x86-64 not at entry use regs?')
                         for p in memUtils.param_map[map_id]:
                             frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map[map_id][p])
                     else:
-                        self.lgr.debug('taskUtils frameFromRegs x86-64 at sysenter use regs')
+                        #self.lgr.debug('taskUtils frameFromRegs x86-64 at sysenter use regs')
                         for p in memUtils.param_map[map_id]:
                             frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map[map_id][p])
         
