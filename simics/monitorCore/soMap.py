@@ -260,21 +260,23 @@ class SOMap():
 
     def isCode(self, address, tid):
         ''' is the given address within the text segment or those of SO libraries? '''
-        #self.lgr.debug('compare 0x%x to 0x%x - 0x%x' % (address, self.prog_start, self.prog_end))
         tid = self.getSOTid(tid)
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
             self.lgr.debug('SOMap isCode, regot tid after getSOTid failed, tid:%s missing from so_file_map' % tid)
             return False
+        #if tid in self.prog_start and self.prog_start[tid] is not None:
+        #    self.lgr.debug('compare 0x%x to 0x%x - 0x%x' % (address, self.prog_start[tid], self.prog_end[tid]))
         if tid in self.prog_start and self.prog_start[tid] is not None and address >= self.prog_start[tid] and address <= self.prog_end[tid]:
             prog = self.text_prog[tid]
             prog_info = self.prog_info[prog]
             #self.lgr.debug('soMap isCode prog %s info %s' % (prog, prog_info.toString()))
             code_start = None
             # TBD this is messed up.  Just use entry point address
-            if self.cpu.architecture == 'ppc32':
+            if True or self.cpu.architecture == 'ppc32':
                 code_start = self.prog_start[tid] 
             else:
+                self.lgr.debug('soMap isCode prog_info.plt_offset 0x%x' % prog_info.plt_offset)
                 code_start = self.prog_start[tid] + prog_info.plt_offset    
             #self.lgr.debug('soMap isCode addr 0x%x code_start 0x%x' % (address, code_start))
             if address > code_start:
