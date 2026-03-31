@@ -1131,13 +1131,14 @@ class StackTrace():
                             ptr = bp
                 else:
                     # TBD at least add some guard rails
-                    new_ptr = self.hackBP(ptr, fname)
-                    #self.lgr.debug('stackTrace doTrace new_ptr from hackBP is 0x%x' % new_ptr)
-                    if new_ptr is not None and new_ptr != 0:
-                        ptr = new_ptr
-                        cur_fun_name = None
-                        hacked_bp = True
-                        self.prev_frame_sp = ptr
+                    if self.use_bp: 
+                        new_ptr = self.hackBP(ptr, fname)
+                        #self.lgr.debug('stackTrace doTrace new_ptr from hackBP is 0x%x' % new_ptr)
+                        if new_ptr is not None and new_ptr != 0:
+                            ptr = new_ptr
+                            cur_fun_name = None
+                            hacked_bp = True
+                    self.prev_frame_sp = ptr
             else:
                 #self.lgr.debug('stackTrace doTrace Windows check bp, fname is %s' % fname)
                 new_ptr = self.windowsBP(ptr, fname)
@@ -1279,7 +1280,7 @@ class StackTrace():
                     if call_to is not None:
                         if called_fun_name is not None:
                             fun_name = called_fun_name
-                        self.lgr.debug('stackTrace call_to 0x%x called_fun_name %s' % (call_to, called_fun_name))
+                        #self.lgr.debug('stackTrace call_to 0x%x called_fun_name %s' % (call_to, called_fun_name))
                              
                     #else:
                     #    self.lgr.debug('stackTrace call_to None')
