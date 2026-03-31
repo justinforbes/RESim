@@ -31,6 +31,7 @@ import struct
 import decode
 import traceback
 from simics import *
+import cli
 MACHINE_WORD_SIZE = 8
 class ValueError(Exception):
     pass
@@ -1107,6 +1108,7 @@ class MemUtils():
         #else:
         #    self.param.current_task = self.param.current_task + abs(delta)
         kernel_offset = False
+        msr_offset = False
         if hasattr(self.param, 'rand_kernel_offset') and self.param.rand_kernel_offset is not None:
             # random kernel code (kernel_offset) sysenter is the same, but other code is offset by constant
             kernel_offset = True
@@ -1114,16 +1116,26 @@ class MemUtils():
             op2, op1 = decode.getOperands(instruct[1])
             this_kernel_offset = int(op2, 16)
             kernel_offset_delta = this_kernel_offset - self.param.rand_kernel_offset
+        else:
+            cmd = 'get-msr %s 0x176' % cpu.name
+            dumb, value = cli.quiet_run_command(cmd)
+            this_msr_176 = int(value,16)
+            kernel_offset_delta = this_msr_176 - self.param.msr_176
+            msr_offset = True
+            self.lgr.debug('memUtils adjustParam x86, param msr_176 is 0x%x this one 0x%x delta 0x%x' % (self.param.msr_176, this_msr_176,
+                kernel_offset_delta))
 
         if self.param.sysenter is not None and not kernel_offset:
             self.lgr.debug('memUtils adjustParam sysenter was to 0x%x' % self.param.sysenter)
             if self.WORD_SIZE == 4:
                 self.param.sysenter = self.param.sysenter + delta
             else:
-                self.param.sysenter = self.param.sysenter - delta
-                # TBD remove if
-                #self.param.sysenter = self.param.sysenter + delta
-                pass
+                if msr_offset is None:
+                    self.param.sysenter = self.param.sysenter - delta
+                    # TBD remove if
+                    #self.param.sysenter = self.param.sysenter + delta
+                else:
+                    self.param.sysenter = self.param.sysenter + kernel_offset_delta
             self.lgr.debug('memUtils adjustParam sysenter adjusted to 0x%x' % self.param.sysenter)
 
         if self.param.sysexit is not None and not kernel_offset:
@@ -1131,16 +1143,19 @@ class MemUtils():
             if self.WORD_SIZE == 4:
                 self.param.sysexit = self.param.sysexit + delta
             else:
-                self.param.sysexit = self.param.sysexit + delta
+                if msr_offset is None:
+                    self.param.sysexit = self.param.sysexit + delta
+                else:
+                    self.param.sysexit = self.param.sysenter + sysexit
 
         if self.param.sysret64 is not None:
             if self.WORD_SIZE == 4:
                 self.param.sysret64 = self.param.sysret64 + delta
             else:
-                if kernel_offset:
+                if kernel_offset or msr_offset:
                     self.param.sysret64 = self.param.sysret64 + kernel_offset_delta
-                    self.lgr.debug('memUtils adjustParam sysret64 was 0x%x this_kernel_offset 0x%x  delta 0x%x' % (self.param.sysret64,
-                          this_kernel_offset, kernel_offset_delta))
+                    self.lgr.debug('memUtils adjustParam sysret64 was 0x%x delta 0x%x' % (self.param.sysret64,
+                          kernel_offset_delta))
                     
                 else:
                     self.lgr.debug('memUtils adjustParam sysret64 was 0x%x' % self.param.sysret64)
@@ -1162,12 +1177,13 @@ class MemUtils():
                 self.param.syscall_jump = self.param.syscall_jump - delta
                 self.lgr.debug('memUtils adjustParam syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
         else:
+            # 64 bit
             if self.param.iretd is not None:
-                if kernel_offset:
+                if kernel_offset or msr_offset:
                     self.param.iretd = self.param.iretd + kernel_offset_delta
                 else:
                     self.param.iretd = self.param.iretd + delta
-            if not kernel_offset:
+            if not kernel_offset and not msr_offset:
                 self.lgr.debug('memUtils adjustParam page_fault was 0x%x' % self.param.page_fault)
                 self.param.page_fault = self.param.page_fault - delta
                 self.lgr.debug('memUtils adjustParam page_fault now 0x%x' % self.param.page_fault)
@@ -1179,15 +1195,17 @@ class MemUtils():
             self.param.syscall_compute = self.param.syscall_compute - delta
 
             if self.param.syscall_jump is not None:
-                if not kernel_offset:
+                if not kernel_offset and not msr_offset:
                     ''' This value sometimes seems to get adjusted the other way.  TBD why? '''
                     self.lgr.debug('memUtils adjustParam syscall_jump was 0x%x' % self.param.syscall_jump)
                     self.param.syscall_jump = self.param.syscall_jump - delta
                     self.lgr.debug('memUtils adjustParam syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
-                else:
+                elif kernel_offset or msr_offset:
                     self.lgr.debug('memUtils adjustParam syscall_jump for kernel offset was 0x%x' % self.param.syscall_jump)
                     self.param.syscall_jump = self.param.syscall_jump - kernel_offset_delta
                     self.lgr.debug('memUtils adjustParam syscall_jump kernel offset adjusted to 0x%x' % self.param.syscall_jump)
+                #else:
+                #    self.lgr.debug('memUtils adjustParam leaving syscall_jump because using msr?')
             if self.param.syscall64_jump is not None:
                 self.lgr.debug('memUtils adjustParam syscall_jump was 0x%x' % self.param.syscall64_jump)
                 self.param.syscall_jump = self.param.syscall64_jump - delta
