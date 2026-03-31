@@ -313,7 +313,7 @@ class Dmod():
         except:
             self.lgr.debug('dMod checkString %d bytes failed join %s' % (len(byte_array), str(byte_array)))
             return retval
-        self.lgr.debug('dMod checkString %d bytes (%d) in s: <%s>' % (len(byte_array), len(s), s))
+        #self.lgr.debug('dMod checkString %d bytes (%d) in s: <%s>' % (len(byte_array), len(s), s))
         rm_this = False
         if self.kind == 'sub_replace':
             rm_this = self.subReplace(cpu, s, addr)
