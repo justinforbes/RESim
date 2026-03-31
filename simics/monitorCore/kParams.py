@@ -107,6 +107,7 @@ class Kparams():
         # kernels that hardcode an offset into code during init
         self.rand_kernel_offset = None
         self.rand_kernel_offset_eip = None
+        self.msr_176 = None
 
     def printParams(self):
         print('Kernel parameters:')
