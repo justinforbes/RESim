@@ -204,7 +204,10 @@ def memoryValue(cpu, memory):
     if cpu.architecture == 'ppc32':
         value = SIM_get_mem_op_value_be(memory)
     else:
-        value = SIM_get_mem_op_value_le(memory)
+        if memory.size <= 8:
+            value = SIM_get_mem_op_value_le(memory)
+        else:
+            value = SIM_get_mem_op_value_buf(memory)
     return value
 
 def setMemoryValue(cpu, memory, value):
