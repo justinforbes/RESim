@@ -163,9 +163,10 @@ def getRelocate(full_path, lgr):
                     
 
 class WinProg():
-    def __init__(self, top, cpu, mem_utils, task_utils, context_manager, so_map, stop_action, param, lgr):
+    def __init__(self, top, cpu, cell_name, mem_utils, task_utils, context_manager, so_map, stop_action, param, lgr):
         self.top = top
         self.cpu = cpu
+        self.cell_name = cell_name
         self.mem_utils = mem_utils
         self.lgr = lgr
         self.task_utils = task_utils
@@ -238,10 +239,14 @@ class WinProg():
     def runToText(self, want_tid):
         self.lgr.debug('winProg runToText want_tid %s' % want_tid)
         eproc = self.task_utils.getCurProcRec()
-        load_addr = getLoadAddress(self.cpu, self.mem_utils, eproc, self.prog_string, self.lgr)
-        if load_addr is None:
-            self.lgr.error('winprog failed to get load addess for %s' % want_tid)
-            return
+        if self.top.osType(self.cell_name) == 'WINXP': 
+            load_addr = 0x400000 
+            self.lgr.debug('winProg runToText is XP assume load addr 0x%x' % load_addr)
+        else: 
+            load_addr = getLoadAddress(self.cpu, self.mem_utils, eproc, self.prog_string, self.lgr)
+            if load_addr is None:
+                self.lgr.error('winprog failed to get load addess for %s' % want_tid)
+                return
         self.lgr.debug('winProg runToText load_addr 0x%x' % load_addr)
         print('Program %s image base is 0x%x' % (self.prog_string, load_addr))
         self.context_manager.setDebugTid()

@@ -48,6 +48,7 @@ import os
 import cli
 
 import w7Params
+import winxpParams
 import winKParams
 def my_SIM_disassemble_address(cpu, pc, logical, sub_instruct):
         instruct = SIM_disassemble_address(cpu, pc, logical, sub_instruct)
@@ -113,18 +114,21 @@ class GetKernelParams():
                     self.want_arm32 = True
                     self.lgr.debug('Will look for only ARM 32 bit syscall jump tables')
                     print('Will look for only ARM 32 bit syscall jump tables')
-        if self.os_type =='WIN7':
-            self.param = winKParams.WinKParams()
+        if self.os_type in ['WIN7', 'WINXP']:
+            self.param = winKParams.WinKParams(self.os_type)
             self.lgr.debug('GetKernelParams kernel_base is 0x%x' % self.param.kernel_base)
         else:
             self.param = kParams.Kparams(self.cpu, self.word_size, platform)
             # override a previous hack
             self.param.sysexit = None
             self.lgr.debug('GetKernelParams kernel_base is 0x%x' % self.param.kernel_base)
+        if self.os_type == 'WINXP':
+            return
 
 
-        ''' try first without reference to fs when finding current_task.  If that fails in 3 searches,
-            try making phys addresses relative to the fs base '''
+        # NOT used for windows XP
+        # try first without reference to fs when finding current_task.  If that fails in 3 searches,
+        #    try making phys addresses relative to the fs base 
         self.param.current_task_fs = False
 
         self.mem_utils = memUtils.MemUtils(self, self.word_size, self.param, self.lgr, arch=self.cpu.architecture)
@@ -1949,7 +1953,10 @@ class GetKernelParams():
         self.force = force
         self.only_64 = only_64
         cpl = memUtils.getCPL(self.cpu)
-        if self.cpu.architecture == 'ppc32':
+        if self.os_type == 'WINXP':
+             self.lgr.debug('is WINXP')
+             winxpParams.WinxpParams(self.param, self.target, lgr=self.lgr)
+        elif self.cpu.architecture == 'ppc32':
             self.ppc_kparams.getParams()
         elif cpl != 0:
             self.entry_mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.startInKernel, True)
@@ -2342,6 +2349,14 @@ class GetKernelParams():
         self.param.code_jump_table = call_map
         key_list = call_map.keys()
         self.lgr.debug('computeESIJumpTable len of key_list is %d' % len(key_list))
+
+    def getTargetEnv(self, name, target=None):
+        retval = None
+        if target is None or target=='unknown':
+            target = self.target
+        if name in self.comp_dict[target]:
+            retval = self.comp_dict[target][name]
+        return retval
 
 if __name__ == '__main__':
     gkp = GetKernelParams()

@@ -71,6 +71,10 @@ decl {
  ! Creates a CD-ROM of type IDE or SATA. Should be the same as
  ! <param>create_disk0</param>.
 
+ param iso_image : file("*") or nil = NIL
+ ! CD rom image
+ ! <param>iso_image</param>.
+
  group "System"
 
  param machine_name : string = "board"
@@ -346,11 +350,12 @@ if $create_cdrom == "sata" {
 
 ### nic
 if defined use_broadcom{
-   $eth_comp = (create-pci-bcm5704c name = $motherboard.nb.bcm5704c mac_address0 = $mac_address_1 mac_address1 = $mac_address_2)
+   $eth_comp = (create-pci-bcm5704c-comp name = $motherboard.nb.bcm5704c mac_address0 = $mac_address_1 mac_address1 = $mac_address_2)
    echo "pci_slot[0] gets mac address "+ $mac_address_1+" and "+ $mac_address_2
    connect $motherboard.nb.pci_slot[0] $eth_comp.pci_bus
 }else{
    # ignore name assignments, simics cli fu
+   echo "Ethernet device "+$eth_dev
    if $mac_address_1 != "None"    {
       echo "mac addr 1 is "+$mac_address_1
       if $eth_dev == "i82559"{
@@ -362,6 +367,8 @@ if defined use_broadcom{
           #$eth_comp = (create-pci-dec21140a-comp name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
       }else if $eth_dev == "i82574_v2" {
           $eth_comp = (create-i82574-v2-comp name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
+      }else if $eth_dev == "dec21041" {
+          $eth_comp = (create-pci-dec21041-comp name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
       }else{
           echo "Unknown ethernet device "+$eth_dev
       }
@@ -379,6 +386,8 @@ if defined use_broadcom{
           $eth_comp2 = (create-pci-i82543gc-comp name = $motherboard.nb.$eth_dev+2 mac_address = $mac_address_2)
       }else if $eth_dev == "i82574_v2" {
           $eth_comp2 = (create-i82574-v2-comp name = $motherboard.nb.$eth_dev+2 mac_address = $mac_address_2)
+      }else if $eth_dev == "dec21041" {
+          $eth_comp2 = (create-pci-dec21041-comp name = $motherboard.nb.$eth_dev+2 mac_address = $mac_address_2)
       }else{
           echo "Unknown ethernet device "+$eth_dev
       }
@@ -397,6 +406,8 @@ if defined use_broadcom{
       }else if $eth_dev == "i82574_v2" {
           $eth_comp3 = (create-i82574-v2-comp name = $motherboard.nb.$eth_dev+3 mac_address = $mac_address_3)
           echo "eth_comp3 is "+$eth_comp3
+      }else if $eth_dev == "dec21041" {
+          $eth_comp3 = (create-pci-dec21041-comp name = $motherboard.nb.$eth_dev+3 mac_address = $mac_address_3)
       }else{
           echo "Unknown ethernet device "+$eth_dev
       }

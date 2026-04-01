@@ -10,6 +10,8 @@ import os
 import sys
 import argparse
 import json
+import subprocess
+import shlex
 resim_dir = os.getenv('RESIM_DIR')
 sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
 import resimUtils
@@ -30,9 +32,17 @@ def buildExecDict(exec_list_file, ini, root_dir, lgr):
                 #    if base not in collisions:
                 #        collisions.append(base)
                 #    continue
+                full_path = os.path.join(root_dir, path)
+                cmd = 'file "%s"' % full_path
+                with subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE) as ps:
+                    output = ps.communicate()
+                    if ' PE' in output[0].decode():
+                        #print('is pe %s' % path)
+                        pass
+                    else:
+                        continue
                 if base not in exec_map:
                     exec_map[base] = []
-                full_path = os.path.join(root_dir, path)
                 size, machine, image_base, addr_of_text = winProg.getSizeAndMachine(full_path, lgr)
                 if machine is None:
                     print('Failed to find machine size for full path %s' % full_path)
@@ -63,6 +73,9 @@ def buildList(root_dir, exec_list_file):
         os.chdir(root_dir)
         here = os.getcwd()
         print('dir is %s' % here)
+        parent = os.path.dirname(exec_list_file)
+        cmd = 'mkdir -p %s' % parent
+        os.system(cmd)
         cmd = 'find ./ -name *.exe -type f | grep -v "/winsxs/" >%s ' % (exec_list_file)
         print('cmd is %s' % cmd)
         os.system(cmd)

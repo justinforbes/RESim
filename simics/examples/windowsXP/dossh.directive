@@ -1,0 +1,4 @@
+FILE=id_rsa
+FILE=ssh_test.sh
+COMMAND=chmod a+x /tmp/ssh_test.sh
+COMMAND=/tmp/ssh_test.sh

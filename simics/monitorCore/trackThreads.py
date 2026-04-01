@@ -249,7 +249,11 @@ class TrackThreads():
 
     def trackSO(self):
         if self.top.isWindows():
-            call_list = ['OpenFile', 'CreateSection', 'MapViewOfSection', 'CreateUserProcess', 'CreateFile', 'OpenSection']
+            call_list = ['OpenFile', 'CreateSection', 'MapViewOfSection', 'CreateFile', 'OpenSection']
+            if self.top.osType(self.cell_name) == 'WINXP':
+                call_list.append('CreateProcessEx')
+            else:
+                call_list.append('CreateUserProcess')
         else:
             call_list = ['open', 'openat', 'mmap']
             if self.mem_utils.WORD_SIZE == 4 or self.compat32: 
