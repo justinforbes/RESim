@@ -956,7 +956,7 @@ class TaskUtils():
             if not at_enter:
             #if not at_enter and hasattr(self.param, 'code_jump_table') and self.param.code_jump_table is not None:
                 rdi = self.mem_utils.getRegValue(self.cpu, 'rdi')
-                self.lgr.debug('getProcArgsFromStack has code jump table rdi 0x%x' % rdi)
+                #self.lgr.debug('getProcArgsFromStack not at_enter rdi 0x%x' % rdi)
                 sptr = rdi + 0x70
                 # in this scheme, they put the argv addr ptr after the prog string
                 prog_addr = self.mem_utils.readPtr(cpu, sptr)
@@ -964,8 +964,8 @@ class TaskUtils():
                 if prog_string is None:
                     self.lgr.error('getProcArgsFromStack confused about prog string and argv')
                     return None, None
-                argv_addr = prog_addr + len(prog_string) + 1
-                #self.lgr.debug('getProcArgsFromStack thinks argv_addr is 0x%x from prog_addr 0x%x' % (argv_addr, prog_addr))
+                argv_addr = sptr - 8
+                #self.lgr.debug('getProcArgsFromStack thinks argv_addr is 0x%x from prog_addr 0x%x sptr is 0x%x' % (argv_addr, prog_addr, sptr))
                 argv = self.mem_utils.readPtr(cpu, argv_addr)
                 if argv is None:
                     self.lgr.error('getProcArgsFromStack confused argv, argv_addr was 0x%x' % argv_addr)
@@ -987,24 +987,27 @@ class TaskUtils():
                         i = i + 1
 
             else:
-                # if swap, use rdx
-                if hasattr(self.param, 'code_jump_table') and self.param.code_jump_table is not None:
+                # at sysenter
+                if True:
+                #if hasattr(self.param, 'code_jump_table') and self.param.code_jump_table is not None:
                     use_reg = 'rdi'
                     prog_addr = self.mem_utils.getRegValue(self.cpu, 'rdi')
                     reg_val = self.mem_utils.getRegValue(self.cpu, 'rsi')
-                    #self.lgr.debug('getProcArgsFromStack 64 bit code_jump_table prog_addr 0x%x set reg value to rsi 0x%s' % (prog_addr, reg_val)) 
+                    #self.lgr.debug('getProcArgsFromStack 64 bit has code_jump_table and at sysenter prog_addr 0x%x set reg value to rsi 0x%s' % (prog_addr, reg_val)) 
                     i=0
                     done = False
                     while not done and i < 30:
                         reg_val = reg_val+self.mem_utils.WORD_SIZE
                         arg_addr = self.mem_utils.readPtr(cpu, reg_val)
                         if arg_addr != 0:
-                            self.lgr.debug("getProcArgsFromStack adding arg addr %x read from 0x%x" % (arg_addr, reg_val))
+                            #self.lgr.debug("getProcArgsFromStack adding arg addr %x read from 0x%x" % (arg_addr, reg_val))
                             arg_addr_list.append(arg_addr)
                         else:
                             done = True
                         i += 1
                 else:
+                    # TBD REMOVE
+                    # sysenter and no code jump table
                     if not at_enter and self.param.x86_reg_swap:
                         use_reg = 'rdx'
                     else:
@@ -1015,15 +1018,16 @@ class TaskUtils():
                     if prog_addr is None or prog_addr == 0:
                         return None, None
                     arg_addr_addr_addr = reg_val + self.mem_utils.WORD_SIZE
-                    self.lgr.debug('getProcArgsFromStack 64 bit no code jump table prog_addr 0x%x reg_val 0x%x arg_addr_addr_addr 0x%x' % (prog_addr, reg_val, arg_addr_addr_addr))
+                    #self.lgr.debug('getProcArgsFromStack 64 bit no code jump table, at sysenter prog_addr 0x%x reg_val 0x%x arg_addr_addr_addr 0x%x' % (prog_addr, reg_val, arg_addr_addr_addr))
                     arg_addr_addr = self.mem_utils.readPtr(cpu, arg_addr_addr_addr)
                     for i in range(20):
                         arg_addr = self.mem_utils.readPtr(cpu, arg_addr_addr)
                         if arg_addr == 0 or arg_addr is None:
                             break
                         arg_addr_list.append(arg_addr)
-                        self.lgr.debug("getProcArgsFromStack adding arg addr %x read from 0x%x" % (arg_addr, arg_addr_addr))
+                        #self.lgr.debug("getProcArgsFromStack adding arg addr %x read from 0x%x" % (arg_addr, arg_addr_addr))
                         arg_addr_addr = arg_addr_addr + self.mem_utils.WORD_SIZE
+                    SIM_break_simulation('remove this')
                     
                 if prog_addr is not None:
                     self.lgr.debug('getProcArgsFromStack 64 bit reg_val is 0x%x prog_addr 0x%x' % (reg_val, prog_addr))
