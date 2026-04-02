@@ -68,8 +68,8 @@ class DoInUser():
         if new == Sim_CPU_Mode_User:
             if tid == self.tid:
                 eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
-                self.lgr.debug('doInUser mode_changed in user mode, syscall_ret 0x%x do callback %s from cycle 0x%x' % (eax, str(self.callback), self.cpu.cycles))
-                SIM_run_alone(self.callback, self.param) 
+                self.lgr.debug('doInUser mode_changed in user mode, syscall_ret 0x%x do callback %s from cycle 0x%x' % (eax, str(self.callback_list), self.cpu.cycles))
+                SIM_run_alone(self.doCallbacks, None)
                 hap = self.mode_hap
                 SIM_run_alone(resimHaps.RES_delete_mode_hap, hap)
                 self.mode_hap = None
