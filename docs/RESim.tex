@@ -930,6 +930,8 @@ a jumper will reset the reverse execution origin, and thus may not be suitable w
 where a slow-loading component is started into a quiecient state, and then other components are added to the simulation.
 \item {\tt INIT\_FROM\_SNAP} Like RUN\_FROM\_SNAP, but does not restore any of the RESim data from pickle files.  Intended for use when a target is rebooted.
 Create a snapshot when shutdown seems completed and then run from that with this setting so that ASLR and other boot-dependent changes get reassessed.
+\item {\tt ALLOW\_REAL\_EXTERNAL} If the {\tt create\_network} component parameter is used to create a dhcp service node, setting this value
+to TRUE will allow the service node to access external networks via dns and napt"
 
 \end{itemize}
 
@@ -1092,8 +1094,8 @@ though this should be fixed to allow both to be use (see simicsScripts/targets/x
 Refer to the Simics \textit{Ethernet Networking Technology Guide} for details on connecting the simulation to real networks.
 Also see the section in this guide on driver platforms (\ref{driver} and see the limitations described in \ref{real-networks}.  
 By default, the Simics {\tt connect-real-network} command creates a service
-node that provides NAPT forwarding of traffic from targets that can reach the service node.  Unless you want the target to be able to
-reach external networks (e.g., to install packages), consider using {\tt service\_node.sn->napt\_enable = 0} to disable NAPT.
+node that provides NAPT forwarding of traffic from targets that can reach the service node.  If you want the target to be able to
+reach external networks (e.g., to install packages), use the {\tt ALLOW\_REAL\_EXTERNAL} environment value, otherwise real dns and napt are disabled.
 
 \subsubsection{DHCP}
 \label{DHCP}
