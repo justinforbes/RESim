@@ -402,13 +402,15 @@ class LaunchRESim():
         except:
             pass
         SIM_run_command('RESim_log.log-level 1')
-       
-        try:
-            # in case a dhcp service node was created, keep it off the network TBD make a param
-            SIM_run_command('dhcp_service_node.disable-real-dns')
-            SIM_run_command('dhcp_service_node.sn->napt_enable=0')
-        except:
-            pass
+        REAL_EXTERNAL = os.getenv('ALLOW_REAL_EXTERNAL')
+      
+        if not resimUtils.yesNoTrueFalse(REAL_EXTERNAL): 
+            try:
+                # in case a dhcp service node was created, keep it off the network TBD make a param
+                SIM_run_command('dhcp_service_node.disable-real-dns')
+                SIM_run_command('dhcp_service_node.sn->napt_enable=0')
+            except:
+                pass
         try:
             # for case where snapshot was created before naming of service node was fixed
             SIM_run_command('service_node_cmp0.disable-real-dns')
