@@ -112,7 +112,7 @@ def getText(path, lgr):
             size = int(parts[3], 16)
             if lgr is not None:
                 lgr.debug('readelf not is_dyn got LOAD offset 0x%x' % offset)
-                lgr.debgu('from line %s' % line)
+                lgr.debug('from line %s' % line)
         elif line.startswith('LOAD') and is_dyn and is_aarch64 and ' E ' in line:
         #elif addr is None and line.startswith('LOAD') and is_dyn and is_aarch64: 
             #print('using line %s' % line)
