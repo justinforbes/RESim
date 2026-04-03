@@ -115,7 +115,7 @@ class TargetFS():
                             self.file_cache[path] = retval
                         if lgr is not None:
                              lgr.debug('getFull used find found file %s' % retval)
-                else:
+                elif lgr is not None:
                     self.lgr.debug('TargetFS, did not find program %s' % full)
 
             else:
