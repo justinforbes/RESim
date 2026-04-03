@@ -132,8 +132,9 @@ class Disassemble():
                 #self.lgr.debug('disassemble getProgBytes addr 0x%x is fname %s load_addr 0x%x, load_offset 0x%x' % (addr, fname, load_addr, load_offset))
                 if fname not in self.prog_bytes:
                     full_path = self.top.getFullPath(fname=fname)
-                    with open(full_path, 'rb') as fh:
-                       self.prog_bytes[fname] = fh.read()
+                    if full_path is not None:
+                        with open(full_path, 'rb') as fh:
+                           self.prog_bytes[fname] = fh.read()
             else:
                 self.lgr.error('disassemble getProgBytes failed to get fname for addr 0x%x is fname %s' % (addr))
         else:
@@ -154,17 +155,20 @@ class Disassemble():
             #else:
             #    self.lgr.debug('disassemble getDisassemble force for addr 0x%x' % addr)
             fname, load_addr, end = self.getProgBytes(addr)
-            if load_addr is not None:
-                delta = addr - load_addr
-                for (address, size, mnemonic, op_str) in md.disasm_lite(self.prog_bytes[fname][delta:], addr, count=1):
-                    #self.lgr.debug("disassemble getDisassemble found 0x%x:\t%s\t%s" %(address, mnemonic, op_str))
-                    retval = (size, mnemonic+' '+op_str)
-                if retval is None:
-                    # no better plan, avoids None
-                    retval = instruct
-            else:
-                self.lgr.debug('disassemble getDisassemble load_arr is None for addr 0x%x' % addr)
+            if fname not in self.prog_bytes:
                 retval = instruct
+            else:
+                if load_addr is not None:
+                    delta = addr - load_addr
+                    for (address, size, mnemonic, op_str) in md.disasm_lite(self.prog_bytes[fname][delta:], addr, count=1):
+                        #self.lgr.debug("disassemble getDisassemble found 0x%x:\t%s\t%s" %(address, mnemonic, op_str))
+                        retval = (size, mnemonic+' '+op_str)
+                    if retval is None:
+                        # no better plan, avoids None
+                        retval = instruct
+                else:
+                    self.lgr.debug('disassemble getDisassemble load_arr is None for addr 0x%x' % addr)
+                    retval = instruct
         else:
             retval = instruct
         return retval
