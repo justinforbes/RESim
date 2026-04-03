@@ -19,13 +19,8 @@ def handle_dns_query(packet):
 
     if packet[DNS].opcode == 0 and packet[DNS].qr == 0:
         qname = packet[DNSQR].qname.decode('utf-8')
-        try:
-            qtype_code = packet[DNSQR].qtype
-            qtype_str = packet[DNSQR].fields['qtype'].i2s[qtype_code]
-        except KeyError:
-            # Fallback for unknown qtypes not in Scapy's internal dictionary
-            qtype_str = "UNKNOWN"
-        print(f"[*] Received DNS query for: {qname} (Type: {qtype_str}) from {packet[IP].src}")
+        qtype_code = packet[DNSQR].qtype
+        print(f"[*] Received DNS query for: {qname} (Type: {qtype_code}) from {packet[IP].src}")
 
         dns_records = load_dns_records()
         
