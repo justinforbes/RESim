@@ -33,8 +33,19 @@ def demangle(fname):
         fh.write(s)
     print('Wrote mangle to %s.mangle' % fname)
 
+def getExportFuns():
+    retval = []
+    export_list = list(idautils.Entries())
+    for exp_i, exp_ord, exp_ea, exp_name in export_list:
+        retval.append(exp_name)
+    return retval
+
 def dumpFuns(fname=None):
     funs = {}
+    export_list = getExportFuns()
+    export_alias = {}
+    for f in export_list:
+        print('export %s' % f)
     #ea = get_screen_ea()
     #print 'ea is %x' % ea
     if fname is None:
@@ -59,6 +70,7 @@ def dumpFuns(fname=None):
         ida_loader.set_database_flag(ida_loader.DBFL_KILL)
     else:
         print('No image base found as env variable, using existing image_base')
+    info = idaapi.get_inf_structure()
     for ea in idautils.Segments():
         start = idaversion.get_segm_attr(ea, idc.SEGATTR_START)
         end = idaversion.get_segm_attr(ea, idc.SEGATTR_END)
@@ -77,14 +89,36 @@ def dumpFuns(fname=None):
                 if demangled is not None:
                     function_name = demangled
                 funs[function_ea]['name'] = function_name
-                print('try adjustStack fun %s fun ea 0x%x' % (function_name, function_ea))
+                print('try adjustStack fun %s fun ea 0x%x fun_end 0x%x' % (function_name, function_ea, fun_end))
                 adjust_sp = adjustStack(function_name, function_ea)
                 if adjust_sp is not None:
-                    #print('function %s function_ea 0x%x will adjust 0x%x' % (function_name, function_ea, adjust_sp))
+                    print('function %s function_ea 0x%x will adjust 0x%x' % (function_name, function_ea, adjust_sp))
                     funs[function_ea]['adjust_sp'] = adjust_sp
+                if info.procname in ['ARM'] and function_name in export_list and (fun_end - function_ea)<12:
+                    instruct = idc.GetDisasm(fun_end).lower()
+                    if instruct.startswith('b '):
+                        parts = instruct.split()
+                        if parts[1].startswith('sub_'):
+                            print('exported function %s branches to %s instruct %s' % (function_name, parts[1], instruct)) 
+                            fun_ip = int(parts[1][4:], 16)
+                            export_alias[function_name] = fun_ip
+                        else:
+                            print('exported function %s branch to named fuction instruct %s' % (function_name, instruct)) 
+    
             except KeyError:
                 print('failed getting attribute for 0x%x' % function_ea)
                 pass
+    for export_name in export_alias:
+        fun_ip = export_alias[export_name]
+        if fun_ip in funs:
+            fun_name = funs[fun_ip]['name']
+            if fun_name.startswith('sub_'):
+                print('export alias fun name was %s will be %s' % (fun_name, export_name))
+                funs[fun_ip]['name'] = export_name
+            else:
+                print('export alias fun name was %s WILL NOT RENAME to %s' % (fun_name, export_name))
+        else:
+            print('confused, export %s alias ip 0x%x not in funs' % (export_name, fun_ip))
 
     
     with open(fname+'.funs', "w") as fh:
@@ -387,12 +421,26 @@ def renameFromLogger():
                         break
                 if done:
                     break
+
+def isRet(ea):
+    retval = False
+    ins = idautils.DecodeInstruction(ea)
+    mn = ins.get_canon_mnem().lower()
+    if mn.startswith('ret'):
+        retval = True
+    elif mn.startswith('pop'):
+        op0 = idc.print_operand(ea, 0).lower()
+        #print('isRet, is pop, op0 for ea 0x%x is %s' % (ea, op0))
+        if 'pc' in op0:
+            retval=True
+    return retval
                     
 def adjustStack(function_name, fun_ea):
     ''' Search end of function for indications of stack adjustment.  Used as an aide to stack tracing '''
-    # TBD can't all architectures use pfn.points like PPC32?
+    # TBD can't all architectures use pfn.points like PPC32?  actually need to fix ppc32. or confirm stkpts are "add" instructions
     info = idaapi.get_inf_structure()
-    if info.procname == 'PPC':
+    print('adjustStack procname is %s' % info.procname)
+    if info.procname in ['PPC']:
         pfn = ida_funcs.get_fchunk(fun_ea)
         if pfn.pntqty == 0:
             return 0
@@ -400,7 +448,7 @@ def adjustStack(function_name, fun_ea):
         for i in range(pfn.pntqty):
             adjust = pfn.points[i].spd * -1
             adjust_total = adjust_total + adjust 
-            print('ppc adjust 0x%x (%s) index %d set to 0x%x total now 0x%x' % (fun_ea, function_name, i, adjust, adjust_total))
+            print('ppc/ARM adjust 0x%x (%s) index %d set to 0x%x total now 0x%x' % (fun_ea, function_name, i, adjust, adjust_total))
             if adjust_total > 0:
                 # grows to large if all included.  strrchr for example.  are these adjustments that likely happen independently?
                 break
@@ -419,33 +467,22 @@ def adjustStack(function_name, fun_ea):
         ins = idautils.DecodeInstruction(item_ea)
         mn = ins.get_canon_mnem().lower()
         if not got_ret:
-            if not mn.startswith('ret'):
-                continue
-            else:
-                got_ret=True
-
-        #if fun_ea == 0x688f1d30:
-#
-#            print('proc %s ea 0x%x mn is %s' % (info.procname, item_ea, mn))
-#            op0 = idc.print_operand(item_ea, 0)
-#            print('op0 is %s' % op0)
-#            op1 = idc.print_operand(item_ea, 1)
-#            print('op1 is %s' % op1)
-#            op2 = idc.print_operand(item_ea, 2)
-#            print('op2 is %s' % op2)
-
-
+            got_ret = isRet(item_ea)
+            continue
+        if isRet(item_ea):
+            # alternate return.  assuming stack adjust is the same as what we already found
+            break
         if mn == 'add':
             op0 = idc.print_operand(item_ea, 0).lower()
             if 'sp' in op0:
                 if info.procname.startswith('ARM'):
                     op2 = idaversion.get_operand_value(item_ea, 2)
-                    #print('is SP, op2 value is 0x%x' % op2)
+                    #print('item ea 0x%x is SP, op2 value is 0x%x' % (item_ea, op2))
                     adjust = adjust+op2
                 else:
                     op1 = idaversion.get_operand_value(item_ea, 1)
                     adjust = adjust+op1
-                break
+                #break
         elif info.procname == 'ARM' and mn.startswith('l'):
             #print('is arm item_ea 0x%x mn %s' % (item_ea, mn))
             if mn.startswith('ldp'):

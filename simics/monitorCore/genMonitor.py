@@ -547,7 +547,7 @@ class GenMonitor():
                 self.quit()
                 return
             if self.os_type[cell_name].startswith('LINUX'):
-                if 'RESIM_UNISTD' not in comp_dict[cell_name]:
+                if 'RESIM_UNISTD' not in comp_dict[cell_name] and 'RESIM_UNISTD_32' not in comp_dict[cell_name]:
                     if cell_name == 'driver':
                         print('Driver missing RESIM_UNISTD, will not be analyzed')
                         continue
@@ -555,7 +555,8 @@ class GenMonitor():
                     self.lgr.error('Target is missing RESIM_UNISTD path')
                     self.quit()
                     return
-                self.unistd[cell_name] = comp_dict[cell_name]['RESIM_UNISTD']
+                if 'RESIM_UNISTD' in comp_dict[cell_name]:
+                    self.unistd[cell_name] = comp_dict[cell_name]['RESIM_UNISTD']
                 self.lgr.debug('RESIM_UNISTD for cell %s' % cell_name)
                 if 'RESIM_UNISTD_32' in comp_dict[cell_name]:
                     self.unistd32[cell_name] = comp_dict[cell_name]['RESIM_UNISTD_32']
@@ -770,6 +771,7 @@ class GenMonitor():
                 hc.hap = None
 
         for bp in stop_action.breakpoints:
+            self.lgr.debug('genMonitor stopHap stopAction delete breakpoint %d' % bp)
             RES_delete_breakpoint(bp)
         del stop_action.breakpoints[:]
 
@@ -794,6 +796,14 @@ class GenMonitor():
         else:
             self.lgr.debug('genMonitor stopHap enable-vmp')
             SIM_run_command('enable-vmp')
+
+    def revToWhatever(self, breakpoints, callback, tid=None):
+        cpu, comm, cur_tid = self.task_utils[self.target].curThread() 
+        hap_clean = hapCleaner.HapCleaner(cpu)
+        stop_action = hapCleaner.StopAction(hap_clean, breakpoints=breakpoints, tid=tid, prelude=callback)
+        self.stop_hap = self.RES_add_stop_callback(self.stopHap, stop_action)
+        self.lgr.debug('revToWhatever, now reverse')
+        SIM_run_command('rev')
 
     def revToTid(self, tid):
         cpu, comm, cur_tid = self.task_utils[self.target].curThread() 
@@ -962,16 +972,19 @@ class GenMonitor():
                 cpu = self.cell_config.cpuFromCell(cell_name)
                 self.snap_start_cycle[cpu] = cpu.cycles
                 if self.os_type[cell_name].startswith('LINUX'):
-                    if cell_name not in self.unistd:
+                    if cell_name not in self.unistd and cell_name not in self.unistd32:
                         self.lgr.error('Component %s missing unistd path' % cell_name)
                         self.quit()
                         return
+                    unistd = None
+                    if cell_name in self.unistd:
+                        unistd = self.unistd[cell_name]
                     unistd32 = None
                     if cell_name in self.unistd32:
                         unistd32 = self.unistd32[cell_name]
                     root_prefix = self.comp_dict[cell_name]['RESIM_ROOT_PREFIX']
                     task_utils = taskUtils.TaskUtils(cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], 
-                        self.unistd[cell_name], unistd32, self.run_from_snap, self.lgr, root_prefix=root_prefix)
+                        unistd, unistd32, self.run_from_snap, self.lgr, root_prefix=root_prefix)
                     self.task_utils[cell_name] = task_utils
                 elif self.isWindows(target=cell_name):
                     self.task_utils[cell_name] = winTaskUtils.WinTaskUtils(cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], self.run_from_snap, self.lgr) 
@@ -1080,11 +1093,14 @@ class GenMonitor():
                             task_utils = winTaskUtils.WinTaskUtils(cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], self.run_from_snap, self.lgr) 
                             swapper = task_utils.getSystemProcRec()
                         else: 
+                            unistd = None
+                            if cell_name in self.unistd:
+                                unistd = self.unistd[cell_name]
                             unistd32 = None
                             if cell_name in self.unistd32:
                                 unistd32 = self.unistd32[cell_name]
                             task_utils = taskUtils.TaskUtils(cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], 
-                                self.unistd[cell_name], unistd32, self.run_from_snap, self.lgr)
+                                unistd, unistd32, self.run_from_snap, self.lgr)
                             swapper = task_utils.findSwapper()
                         if swapper is None:
                             self.lgr.debug('doInit cell %s taskUtils failed to get swapper, hack harder' % cell_name)
@@ -1606,7 +1622,7 @@ class GenMonitor():
 
                     else:
                         python_path = resimUtils.getPyPath(self.full_path)
-                        if os.path.basename(python_path) == 'python':
+                        if python_path is not None and os.path.basename(python_path) == 'python':
                             pylib = 'libpython'
                             libpython = self.soMap[self.target].findSOPath(pylib)
                             self.lgr.debug('debug, is python path %s libpython %s' % (python_path, libpython))
@@ -3114,6 +3130,7 @@ class GenMonitor():
 
     def trackExecve(self):
         self.toExecve(any_exec=True, run=False, linger=True) 
+
     def toExecve(self, prog=None, flist=None, binary=False, watch_exit=False, any_exec=False, run=True, linger=False):
         cell = self.cell_config.cell_context[self.target]
         if prog is not None:    
@@ -5207,11 +5224,29 @@ class GenMonitor():
 
         if self.isWindows():
             self.lgr.debug('runToOther eip 0x%x' % eip)
-            self.run_to[self.target].runToKnown(threads=threads)
+            self.run_to[self.target].runToKnown(threads=threads, skip=eip)
         else:
-            self.soMap[self.target].runToKnown(eip, threads=threads)
+            self.soMap[self.target].runToKnown(skip=eip, threads=threads)
         if go:
            SIM_continue(0)
+
+    def revToOther(self, no_libc=False):
+        ''' Reverse execution until a different library is entered, or main text is returned to '''
+        cpu = self.cell_config.cpuFromCell(self.target)
+        eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
+
+        if self.isWindows():
+            self.lgr.error('revToOther not yet on windows')
+        else:
+            self.soMap[self.target].revToKnown(eip, no_libc=no_libc)
+
+    def revToSO(self, lib):
+        ''' Reverse execution until a named library is entered '''
+
+        if self.isWindows():
+            self.lgr.error('revToSO not yet on windows')
+        else:
+            self.soMap[self.target].revToSO(lib)
 
     def modFunction(self, fun, offset, word):
         ''' write a given word at the offset of a start of a function.  Intended to force a return
@@ -5262,10 +5297,13 @@ class GenMonitor():
         print('current task cr3 0x%x' % (task_cr3))
         self.lgr.debug('pageInfo current task cr3 0x%x' % (task_cr3))
         if use_cr3 is not None:
-            print('pageInfo Using cr3 0x%x' % (use_cr3))
-            self.lgr.debug('pageInfo Using cr3 0x%x' % (use_cr3))
-
-        ptable_info = pageUtils.findPageTable(cpu, addr, self.lgr, force_cr3=use_cr3)
+            print('Using cr3 0x%x' % (use_cr3))
+     
+        if addr < self.mem_utils[self.target].getUnsigned(self.param[self.target].kernel_base):
+            kernel = False
+        else:
+            kernel = True
+        ptable_info = pageUtils.findPageTable(cpu, addr, self.lgr, force_cr3=use_cr3, kernel=kernel, do_log=True)
         if not quiet:
             print(ptable_info.valueString())
         cpu = self.cell_config.cpuFromCell(self.target)
@@ -5894,8 +5932,8 @@ class GenMonitor():
     def getFullPath(self, fname=None):
         # get the full local path.
         if fname is not None:
-            retval = self.targetFS[self.target].getFull(fname, lgr=self.lgr)
-            self.lgr.debug('getFullPath from targetFS got %s' % retval)
+            retval = self.targetFS[self.target].getFull(fname, lgr=None)
+            #self.lgr.debug('getFullPath from targetFS got %s' % retval)
         else:
             retval =  self.full_path
         return retval 
@@ -6755,6 +6793,7 @@ class GenMonitor():
         if self.target in self.magic_origin:
             self.magic_origin[self.target].deleteMagicHap() 
         resimSimicsUtils.cutRealWorld()
+        self.resetOrigin()
 
     def runTo32(self):
         self.run_to[self.target].runTo32()
@@ -7042,9 +7081,14 @@ class GenMonitor():
     def getSyscallManager(self):
         return self.syscallManager[self.target]
 
-    def disassembleAddress(self, cpu, addr):
+    def disassemble(self, addr, force=False, cpu=None):
+        if cpu is None:
+            cpu = self.cell_config.cpuFromCell(self.target)
+        return self.disassembleAddress(cpu, addr, force=force)
+
+    def disassembleAddress(self, cpu, addr, force=False):
         target = self.cell_config.cellFromCPU(cpu)
-        return self.disassemble_instruct[target].getDisassemble(addr)
+        return self.disassemble_instruct[target].getDisassemble(addr, force=force)
 
     def traceFuns(self):
         self.fun_mgr.traceFuns()
@@ -7097,6 +7141,7 @@ class GenMonitor():
             self.record_entry[self.target].watchSysenter()
         else:
             print('Reverse execution is not enabled.')
+            self.lgr.debug('recordEntry Reverse execution is not enabled.')
 
     def enableReverse(self, target=None):
         if target is None:
@@ -7246,7 +7291,7 @@ class GenMonitor():
         eip = self.getEIP()
         instruct = SIM_disassemble_address(cpu, eip, 1, 0)
         self.lgr.debug('stepOver from 0x%x %s' % (eip, instruct[1]))
-        if decoder.isCall(cpu, instruct[1]): 
+        if decoder.isCall(instruct[1]): 
             next_eip = eip + instruct[0]
             self.doBreak(next_eip)
             SIM_continue(0)

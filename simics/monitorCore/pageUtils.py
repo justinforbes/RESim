@@ -326,6 +326,7 @@ def findPageTableArmV8(cpu, va, lgr, force_cr3=None, use_sld=None, kernel=False,
         if do_log: 
             lgr.debug('l2_base base looks like last level, use it 0x%x' % l2_basex)
         ptable_info.page_base_addr = l2_base_addr
+        vaddr_off = va & 0xffff
         phys = l2_basex + vaddr_off
     if do_log: 
         lgr.debug('got phys of 0x%x' % phys)

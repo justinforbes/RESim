@@ -164,11 +164,12 @@ class SelectInfo():
         self.cpu = cpu
         self.mem_utils = mem_utils
         self.lgr = lgr
+        self.word_size = self.mem_utils.wordSize(self.cpu, cpl=3)
        
     def readit(self, addr):
         if addr > 0:
             low = self.mem_utils.readWord(self.cpu, addr)
-            high = self.mem_utils.readWord(self.cpu, addr+self.mem_utils.WORD_SIZE)
+            high = self.mem_utils.readWord(self.cpu, addr+self.word_size)
             return low, high
         else:
             return None, None
@@ -181,7 +182,7 @@ class SelectInfo():
             high = value & high_mask 
             high = high >> 32
             self.mem_utils.writeWord(self.cpu, addr, low)
-            self.mem_utils.writeWord(self.cpu, addr+self.mem_utils.WORD_SIZE, high)
+            self.mem_utils.writeWord(self.cpu, addr+self.word_size, high)
 
     def getSet(self, addr):
         if addr == 0:
@@ -694,7 +695,7 @@ class Syscall():
                     #proc_break = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys, 1, 0)
                     break_addrs.append(self.param.arm_entry)
                     self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break, 'syscall'))
-                if self.cpu.architecture == 'arm64' and hasattr(self.param, 'arm64_entry'):
+                if self.cpu.architecture == 'arm64' and hasattr(self.param, 'arm64_entry') and self.param.arm64_entry is not None:
                     proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm64_entry, 1, 0)
                     self.lgr.debug('syscall doBreaks set entry for arm64 proc_break 0x%x' % proc_break)
                     break_addrs.append(self.param.arm64_entry)
@@ -768,8 +769,11 @@ class Syscall():
             callnum = self.task_utils.syscallNumber(call, compat32, arm64_app=arm64_app)
             #self.lgr.debug('SysCall setComputeBreaks call: %s  num: %d arm64_app %s' % (call, callnum, str(arm64_app)))
             if callnum is not None and callnum < 0:
-                self.lgr.error('Syscall setComputeBreaks bad call number %d for call <%s>' % (callnum, call))
-                return None, None
+                if call == 'mmap':
+                    callnum = self.task_utils.syscallNumber('mmap2', compat32, arm64_app=arm64_app)
+                if callnum is not None and callnum < 0:
+                    self.lgr.error('Syscall setComputeBreaks bad call number %d for call <%s>' % (callnum, call))
+                    return None, None
             entry = self.task_utils.getSyscallEntry(callnum, compat32, arm64_app=arm64_app)
             #phys = self.mem_utils.v2p(cpu, entry)
             #proc_break = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys, 1, 0)
@@ -1223,11 +1227,12 @@ class Syscall():
         domain = None
         sock_type = None
         protocol = None
+        word_size = self.mem_utils.wordSize(self.cpu, cpl=3)
         if self.cpu.architecture.startswith('arm'):
             domain = frame['param1']
             sock_type_full = frame['param2']
             protocol = frame['param3']
-        elif self.mem_utils.WORD_SIZE==8 and not syscall_info.compat32:
+        elif word_size == 8 and not syscall_info.compat32:
             frame_string = taskUtils.stringFromFrame(frame)
             self.lgr.debug('socket call params: %s' % (frame_string))
             domain = frame['param1']
@@ -1346,7 +1351,7 @@ class Syscall():
                 domain = frame['param1']
                 sock_type_full = frame['param2']
                 protocol = frame['param3']
-            elif self.mem_utils.WORD_SIZE==8 and not syscall_info.compat32:
+            elif word_size == 8 and not syscall_info.compat32:
                 frame_string = taskUtils.stringFromFrame(frame)
                 self.lgr.debug('socket call params: %s' % (frame_string))
                 domain = frame['param1']
@@ -1546,8 +1551,8 @@ class Syscall():
                     # TBD apply this whereever we enter that might modify buffers
                     self.top.stopDataWatch(leave_backstop=True)
         elif socket_callname == "recvmsg": 
-            #frame_string = taskUtils.stringFromFrame(frame)
-            #self.lgr.debug('recvmsg frame %s' % frame_string)
+            frame_string = taskUtils.stringFromFrame(frame)
+            self.lgr.debug('recvmsg frame %s' % frame_string)
             exit_info.old_fd = frame['param1']
             msg_hdr_ptr = frame['param2']
             exit_info.retval_addr = frame['param2']
@@ -1678,6 +1683,7 @@ class Syscall():
         Parse a system call using many if blocks.  Note that setting exit_info to None prevent the return from the
         syscall from being observed (which is useful if this turns out to be not the exact syscall you were looking for.
         '''
+        word_size = self.mem_utils.wordSize(self.cpu, cpl=3)
         exit_info = ExitInfo(self, cpu, tid, comm, callnum, callname, syscall_info.compat32, frame)
         exit_info.syscall_entry = self.mem_utils.getRegValue(self.cpu, 'pc')
         ida_msg = None
@@ -1742,7 +1748,7 @@ class Syscall():
                 ''' TBD think we are triggering off kernel's own read of the fname, then again someitme it seems corrupted...'''
                 ''' Do not use context manager on superstition that filename could be read in some other task context.'''
                 
-                if self.mem_utils.WORD_SIZE == 4:
+                if word_size == 4:
                     self.lgr.debug('syscallParse, open tid:%s filename not yet here... set break at 0x%x ' % (tid, exit_info.fname_addr))
                     self.finish_break[tid] = SIM_breakpoint(cpu.current_context, Sim_Break_Linear, Sim_Access_Read, exit_info.fname_addr, 1, 0)
                     self.finish_hap[tid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.finishParseOpen, exit_info, self.finish_break[tid])
@@ -2008,7 +2014,7 @@ class Syscall():
         elif callname == 'nanosleep':        
             time_spec = frame['param1']
             seconds = self.mem_utils.readWord32(cpu, time_spec)
-            nano = self.mem_utils.readWord32(cpu, time_spec+self.mem_utils.WORD_SIZE)
+            nano = self.mem_utils.readWord32(cpu, time_spec+word_size)
             ida_msg = 'nanosleep tid:%s (%s) time_spec: 0x%x seconds: %d nano: %d' % (tid, comm, time_spec, seconds, nano)
             #SIM_break_simulation(ida_msg)
 
@@ -2032,7 +2038,7 @@ class Syscall():
 
         elif callname in ['_llseek','lseek']:        
             low = None
-            if callname == '_llseek' and self.mem_utils.WORD_SIZE == 4:
+            if callname == '_llseek' and word_size == 4:
                 fd = frame['param1']
                 high = frame['param2']
                 low = frame['param3']
@@ -2065,7 +2071,7 @@ class Syscall():
                             new_value = low + call_param.match_param.delta
                             self.mem_utils.setRegValue(self.cpu, 'param3', new_value)
                             esp = self.mem_utils.getRegValue(self.cpu, 'esp')
-                            self.mem_utils.writeWord(self.cpu, esp+3*self.mem_utils.WORD_SIZE, new_value)
+                            self.mem_utils.writeWord(self.cpu, esp+3*word_size, new_value)
                             #SIM_break_simulation('wrote 0x%x to param3' % new_value)
                         self.stopTrace()
                 elif call_param.match_param.__class__.__name__ == 'Dmod' and has_fd_open:
@@ -2193,7 +2199,7 @@ class Syscall():
             #self.lgr.debug('syscall mmap')
             exit_info.count = frame['param2']
             # TBD added arm_svc check to this.
-            if self.mem_utils.WORD_SIZE == 4 and self.cpu.architecture == 'arm' and frame['param1'] != 0 and self.platform == 'arm5' and self.param.arm_svc:
+            if word_size == 4 and self.cpu.architecture == 'arm' and frame['param1'] != 0 and self.platform == 'arm5' and self.param.arm_svc:
                 self.lgr.debug(taskUtils.stringFromFrame(frame))
                 arg_addr = frame['param1']
                 addr = self.mem_utils.readPtr(self.cpu, arg_addr)
@@ -2362,6 +2368,16 @@ class Syscall():
             self.lgr.debug(ida_msg)
             #SIM_break_simulation(ida_msg)
 
+        elif callname == 'statx':
+            fd = resimSimicsUtils.fdString(frame['param1'])
+            fname_addr = frame['param2']
+            exit_info.fname = self.mem_utils.readString(self.cpu, fname_addr, 256)
+            exit_info.flags = frame['param3'] 
+            mask = frame['param4'] 
+            exit_info.retval_addr = frame['param5']
+            ida_msg = '%s tid:%s (%s) dir FD: %s path_addr: 0x%x path: %s return buffer: 0x%x' % (callname, tid, comm, 
+                   fd, fname_addr, exit_info.fname, exit_info.retval_addr)
+
         elif callname.startswith('stat'):
             fname_addr = frame['param1']
             retval_addr = frame['param2']
@@ -2499,6 +2515,12 @@ class Syscall():
             exit_info.retval_addr = frame['param3'] 
             exit_info.count = frame['param4'] 
             ida_msg = '%s tid:%s (%s) dirfd: %s fname: %s buf addr: 0x%x size: 0x%x cycle:0x%x' % (callname, tid, comm, dirfd, exit_info.fname, exit_info.retval_addr, exit_info.count, self.cpu.cycles)
+        elif callname in ['readlink']:
+            exit_info.fname_addr = frame['param1']
+            exit_info.fname = frame['param1'] = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
+            exit_info.retval_addr = frame['param2']
+            exit_info.count = frame['param3']
+            ida_msg = '%s %s tid:%s (%s) cycle:0x%x' % (callname, exit_info.fname, tid, comm, self.cpu.cycles)
         elif callname == 'chdir':
             exit_info.fname_addr = frame['param1']
             exit_info.fname = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
@@ -2534,6 +2556,8 @@ class Syscall():
                 value = frame['param2']
                 ida_msg = '%s tid:%s (%s) code: %s value: 0x%x' % (callname, tid, comm, code_string, value)
 
+        elif callname == "not_mapped":
+            ida_msg = '%s tid:%s (%s) call_num: 0x%x' % (callname, tid, comm, callnum)
         else:
             ida_msg = '%s %s   tid:%s (%s) cycle:0x%x\n' % (callname, taskUtils.stringFromFrame(frame), tid, comm, self.cpu.cycles)
             self.lgr.debug(ida_msg)
@@ -2646,6 +2670,8 @@ class Syscall():
                 self.top.skipAndMail()
 
     def getExitAddrs(self, break_eip, syscall_info, frame = None):
+        word_size = self.mem_utils.wordSize(self.cpu, cpl=3)
+        ''' Get the system call exit addresses and the call parameter frame'''
         exit_eip1 = None
         exit_eip2 = None
         exit_eip3 = None
@@ -2741,7 +2767,7 @@ class Syscall():
                 #    self.lgr.debug('getExitAddrs calculated exit_eip1 0x%x exit_eip2 0x%x' % (exit_eip1, exit_eip2))
                 #else:
                 #    self.lgr.debug('getExitAddrs calculated exit_eip1 0x%x No second exit' % exit_eip1)
-            elif self.mem_utils.WORD_SIZE == 8:
+            elif word_size == 8:
                 if frame is None:
                     #self.lgr.debug('getExitAddrs calculated, word size 8')
                     if hasattr(self.param, 'code_jump_table') and self.param.code_jump_table is not None:
@@ -2801,6 +2827,7 @@ class Syscall():
         if self.context_manager.isIgnoreContext():
             return
         cpu, comm, tid = self.task_utils.curThread() 
+        self.lgr.debug('syscallhap for %s' % (tid))
         if self.cpu.architecture == 'arm64' and self.arm64BailCheck(break_num):
             return
  
@@ -2894,7 +2921,7 @@ class Syscall():
                return
            #syscall_info.compat32 = False
         ''' call 0 is read in 64-bit '''
-        if callnum == 0 and self.mem_utils.WORD_SIZE==4:
+        if callnum == 0 and word_size==4:
             self.lgr.debug('syscallHap callnum is zero')
             return
         #self.lgr.debug('syscallHap cell %s context %sfor tid:%s (%s) at 0x%x (memory 0x%x) callnum %d (%s) expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, str(context), 
@@ -2942,6 +2969,7 @@ class Syscall():
             return
         
         if self.sharedSyscall.isPendingExecve(tid):
+            self.lgr.debug('syscallHap isPendingExecve call %s tid:%s' % (callname, tid))
             if callname == 'close':
                 self.lgr.debug('syscallHap must be a close on exec? tid:%s' % tid)
                 return
@@ -3080,11 +3108,12 @@ class Syscall():
             if exit_info is not None:
                 if comm != 'tar':
                     name = callname+'-exit' 
-                    #self.lgr.debug('syscallHap call to addExitHap for tid:%s' % tid)
+                    self.lgr.debug('syscallHap call to addExitHap for tid:%s' % tid)
                     if self.stop_on_call:
                         cp = CallParams('stop_on_call', None, None, break_simulation=True)
                         exit_info.call_params.append(cp)
                     self.sharedSyscall.addExitHap(self.cell, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, name)
+                    self.lgr.debug('syscallHap back from call to addExitHap for tid:%s' % tid)
                 else:
                     self.lgr.debug('syscallHap tid:%s skip exitHap for tar' % tid)
 
@@ -3536,8 +3565,9 @@ class Syscall():
         # Read data from IOV structures
         # 
         # how many iov structures will we look at? 
+        word_size = self.mem_utils.wordSize(self.cpu, cpl=3)
         limit = min(10, exit_info.count)
-        iov_size = 2*self.mem_utils.WORD_SIZE
+        iov_size = 2*word_size
         iov_addr = exit_info.retval_addr
         # TBD better starting guess?
         remain = 2000
@@ -3548,7 +3578,7 @@ class Syscall():
             base = self.mem_utils.readPtr(self.cpu, iov_addr)
             if base == 0:
                 continue
-            length = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
+            length = self.mem_utils.readPtr(self.cpu, iov_addr+word_size)
             if remain > length:
                 data_len = length
             else:

@@ -21,11 +21,16 @@ decl {
 }
 $board_name=$host_name
 $num_cores=1
-$create_network = FALSE
 
 $sys_include = $resim_targets+"/armv8a/fvp-system.include"
 $setup_include = $resim_targets+"/armv8a/fvp-linux-setup.include"
 run-command-file $sys_include
+
+# disable napt
+if $service_node != NIL {
+    $service_node.sn->napt_enable = 0
+}
+
 instantiate-components
 run-command-file $setup_include
 #$system.mac->mac_address = $mac_address_0

@@ -408,6 +408,12 @@ class LaunchRESim():
             SIM_run_command('dhcp_service_node.disable-real-dns')
         except:
             pass
+        try:
+            # for case where snapshot was created before naming of service node was fixed
+            SIM_run_command('service_node_cmp0.disable-real-dns')
+            SIM_run_command('service_node_cmp0.sn->napt_enable = 0')
+        except:
+            pass
         '''
         Either launch monitor, or generate kernel parameter file depending on CREATE_RESIM_PARAMS
         '''
@@ -506,10 +512,18 @@ class LaunchRESim():
                             if self.SIMICS_VER.startswith('4'):
                                run_command('$'+cmd)
                         else:
-                            cmd = '%s=%s' % (name, value)
-                            run_command(cmd)
+                            if 'create_network' in name:
+                                did_net_create = True
+                                cmd = '$create_network=TRUE'
+                                run_command(cmd)
+                                cmd = '$eth_link=%s' % value
+                                run_command(cmd)
+                            else:
+                                cmd = '%s=%s' % (name, value)
+                                run_command(cmd)
                             #print('cmd is %s' % cmd)
-                if 'x86' in script and not did_net_create:
+                #if 'x86' in script and not did_net_create:
+                if not did_net_create:
                     params = params+" "+'create_network=FALSE'
 
             if did_net_create:

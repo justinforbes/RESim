@@ -790,13 +790,13 @@ def isSysEnter(instruct):
     else:
         return False
 
-def isCall(cpu, instruct):
+def isCall(instruct):
     if cpu.architecture.startswith('arm'):
-        return decodeArm.isCall(cpu, instruct)
+        return decodeArm.isCall(instruct)
     elif cpu.architecture == 'ppc32':
-        return decodePPC32.isCall(cpu, instruct)
+        return decodePPC32.isCall(instruct)
     else: 
-        return decode.isCall(cpu, instruct)
+        return decode.isCall(instruct)
 
 def parseScanfFormat(format_string):
     """
@@ -899,3 +899,14 @@ def clearBit(array_name, bit_num):
     mask = ~(1 << offset)
     array_name[record] &= mask
     return(array_name[record])
+
+def hexInt(string):
+    retval = None
+    string = string.strip()
+    if string.startswith('#'):
+        string = string[1:]
+    try:
+        retval = int(string, 16)
+    except:
+        pass
+    return retval

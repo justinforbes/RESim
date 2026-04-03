@@ -276,7 +276,7 @@ def armLDM(cpu, instruct, reg, lgr):
             lgr.debug('reg %s not in %s' % (reg, str(regs)))
     return retval
 
-def isCall(cpu, instruct, ignore_flags=False):
+def isCall(instruct):
     if instruct.startswith('bl') or instruct.startswith('bctrl'):
        return True
     else:
@@ -297,7 +297,7 @@ def inBracket(op):
     return retval
 
 def isBranch(cpu, instruct):
-    if instruct.startswith('b') or isCall(cpu, instruct) or instruct.startswith('tb') or instruct.startswith('cb'):
+    if instruct.startswith('b') or isCall(instruct) or instruct.startswith('tb') or instruct.startswith('cb'):
         return True
     else:
         return False

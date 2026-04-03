@@ -30,6 +30,8 @@ class SyscallNumbers():
                 self.fromTbl(fpath)
             elif fpath.endswith('arm64.tbl'):
                 self.fromArm64Tbl(fpath)
+            elif fpath.endswith('arm32.tbl'):
+                self.fromArm64Tbl(fpath)
             else:
                 self.fromInclude(fpath)
 
@@ -43,6 +45,7 @@ class SyscallNumbers():
                 self.callnums[name] = callnum
 
     def fromArm64Tbl(self, fpath):
+        self.lgr.debug('syscallNumbers fromArm64Tbl path %s' % fpath)
         with open(fpath) as fh:
             for line in fh:
                 parts = line.split()

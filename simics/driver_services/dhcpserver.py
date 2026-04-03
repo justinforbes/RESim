@@ -104,6 +104,7 @@ def dhcp_server():
     print(f"Subnet Mask: {dhcp_config['subnet_mask']}")
     print(f"Broadcast IP: {dhcp_config['broadcast_ip']}")
     sys.stdout.flush() 
+    
     sniff(filter="udp and (port 67 or port 68)", prn=handle_dhcp_packet, store=0)
 
 if __name__ == "__main__":
@@ -127,7 +128,6 @@ if __name__ == "__main__":
         dhcp_config["dns"] = args.dns
         print('Calling dhcp_server')
         transaction_id = None
-        
         dhcp_server()
 
     except ValueError as e:

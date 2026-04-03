@@ -140,10 +140,11 @@ class FunMgr():
             
 
     def isCall(self, instruct):
-        if instruct.startswith(self.callmn):
-            return True
-        else:
-            return False
+        return self.decode.isCall(instruct)
+        #if instruct.startswith(self.callmn):
+        #    return True
+        #else:
+        #    return False
 
     def inFun(self, prev_ip, call_to, call_ip=None):
         retval = False
@@ -155,7 +156,8 @@ class FunMgr():
                 call_to_name = clibFuns.adjustFunName(self.ida_funs[comm].getFunName(call_to), self, self.lgr)
                 call_ip_name = clibFuns.adjustFunName(self.ida_funs[comm].getFunName(call_ip), self, self.lgr)
                 #self.lgr.debug('funMgr inFun prev_ip_name %s call_to_name %s call_ip_name %s' % (prev_ip_name, call_to_name, call_ip_name))
-                if prev_ip_name == call_to_name:
+                # TBD better way for ad-hoc equivalence
+                if prev_ip_name is not None and (prev_ip_name == call_to_name or (prev_ip_name.startswith('g_utf8') and prev_ip_name.startswith(call_to_name))):
                     retval = True
                 elif call_to_name == call_ip_name:
                    f1 = self.top.getSOFile(prev_ip) 
@@ -345,10 +347,8 @@ class FunMgr():
         if self.cpu.architecture != 'arm' and instruct[1].startswith('jmp dword'):
             parts = instruct[1].split()
             addrbrack = parts[3].strip()
-            addr = None
-            try:
-                addr = int(addrbrack[1:-1], 16)
-            except:
+            addr = resimUtils.hexInt(addrbrack[1:-1])
+            if addr is None:
                 #self.lgr.debug('funMgr expected jmp address %s' % instruct[1])
                 return None, None
             fun = self.funFromAddr(addr)
@@ -365,7 +365,7 @@ class FunMgr():
             parts = instruct[1].split()
             call_addr = None
             fun = None
-            #self.lgr.debug('funMgr getFunNameFromInstruction for %s' % instruct[1])
+            self.lgr.debug('funMgr getFunNameFromInstruction for %s' % instruct[1])
             if parts[-1].strip().endswith(']'):
                 #self.lgr.debug('funMgr getFunNameFromInstruction is bracket %s' % instruct[1])
                 call_addr, fun = self.indirectCall(instruct, eip)
@@ -375,14 +375,13 @@ class FunMgr():
                     #call_addr = self.mem_utils.getRegValue(self.cpu, parts[1])
                     call_addr = self.getCallRegValue(parts[1], recent_instructs)
                 else:
-                    try:
-                        call_addr = int(parts[1],16)
-                    except ValueError:
-                        #self.lgr.debug('getFunName, %s not a hex' % parts[1])
+                    call_addr = resimUtils.hexInt(parts[1])
+                    if call_addr is None:
+                        self.lgr.debug('getFunName, %s not a hex' % parts[1])
                         pass
                 if call_addr is not None:
                     fun = self.funFromAddr(call_addr)
-                    #self.lgr.debug('funMgr getFunNameFromInstruction call_addr 0x%x got %s' % (call_addr, fun))
+                    self.lgr.debug('funMgr getFunNameFromInstruction call_addr 0x%x got %s' % (call_addr, fun))
         if fun is not None and (fun.startswith('.') or fun.startswith('_')):
             fun = fun[1:]
         #if call_addr is not None:
@@ -403,12 +402,10 @@ class FunMgr():
             if parts[-1].strip().endswith(']'):
                 faddr, fun_name = self.indirectCall(instruct, eip)
             else:
-                try:
-                    faddr = int(parts[1], 16)
-                    #print('faddr 0x%x' % faddr)
-                except ValueError:
+                faddr = resimUtils.hexInt(parts[1])
+                if faddr is None:
                     pass
-                if faddr is not None:
+                else:
                     fun_name = self.funFromAddr(faddr)
             if fun_name is not None:
                 if fun_name.startswith('.') or fun_name.startswith('_'):

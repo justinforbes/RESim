@@ -115,6 +115,8 @@ class TaskUtils():
         self.exec_addrs = {}
         self.swapper = None
         self.ia32_gs_base = None
+        self.syscall_numbers = None
+        self.syscall_numbers32 = None
 
         self.ts_cache = None
         self.ts_cache_cycle = None
@@ -180,7 +182,8 @@ class TaskUtils():
             #    self.lgr.debug('TaskUtils init failed to get phys addr of 0x%x' % (param.current_task))
             #    return None
         #self.lgr.debug('TaskUtils init cell %s with current_task of 0x%x, phys: 0x%x' % (cell_name, param.current_task, self.phys_current_task))
-        self.syscall_numbers = syscallNumbers.SyscallNumbers(unistd, self.lgr)
+        if unistd is not None:
+            self.syscall_numbers = syscallNumbers.SyscallNumbers(unistd, self.lgr)
         if unistd32 is not None:
             self.syscall_numbers32 = syscallNumbers.SyscallNumbers(unistd32, self.lgr)
         else:
@@ -811,12 +814,12 @@ class TaskUtils():
         prog_string = self.mem_utils.readString(cpu, self.exec_addrs[tid].prog_addr, 512)
         if prog_string is not None:
             prog_string = prog_string.strip()
-            self.lgr.debug('readExecParamStrings got prog_string of %s from 0x%x' % (prog_string, self.exec_addrs[tid].prog_addr))
+            #self.lgr.debug('readExecParamStrings got prog_string of %s from 0x%x' % (prog_string, self.exec_addrs[tid].prog_addr))
             for arg_addr in self.exec_addrs[tid].arg_addr_list:
                 arg_string = self.mem_utils.readString(cpu, arg_addr, 512)
                 if arg_string is not None:
                     arg_string_list.append(arg_string.strip())
-                    self.lgr.debug('readExecParamStrings adding arg %s read from 0x%x' % (arg_string, arg_addr))
+                    #self.lgr.debug('readExecParamStrings adding arg %s read from 0x%x' % (arg_string, arg_addr))
             prog_string = prog_string.strip()
             self.exec_addrs[tid].prog_name = prog_string
             self.exec_addrs[tid].arg_list = arg_string_list
@@ -842,7 +845,7 @@ class TaskUtils():
         i=0
         prog_addr = None
         if self.mem_utils.WORD_SIZE == 4:
-            #self.lgr.debug('getProcArgsFromStack word size 4')
+            self.lgr.debug('getProcArgsFromStack word size 4')
             if cpu.architecture.startswith('arm'):
                 if cpu.architecture == 'arm':
                     prog_addr = self.mem_utils.getRegValue(cpu, 'r0')
@@ -936,9 +939,8 @@ class TaskUtils():
                 x0 = self.mem_utils.getRegValue(self.cpu, 'x0')
                 prog_addr = self.mem_utils.readPtr(cpu, x0)
                 argv = self.mem_utils.readPtr(cpu, (x0+8))
-                addr_size = 8
-                #self.lgr.debug('getProcArgsFromStack ARM64 at computed, prog_addr 0x%x argv 0x%x' % (prog_addr, argv))
-                
+                addr_size = 4
+                #self.lgr.debug('getProcArgsFromStack ARM64 at computed, x0 0x%x prog_addr 0x%x argv 0x%x' % (x0, prog_addr, argv))
             while not done and i < limit:
                 #xaddr = argv + mult*self.mem_utils.WORD_SIZE
                 xaddr = argv + mult*addr_size
@@ -1299,8 +1301,8 @@ class TaskUtils():
 
     def syscallName(self, callnum, compat32):
         if self.arm64:
-            #self.lgr.debug('taskUtils syscallName for num %d' % callnum)
-            if self.mem_utils.arm64App(self.cpu):
+            self.lgr.debug('taskUtils syscallName for num %d' % callnum)
+            if self.mem_utils.arm64App(self.cpu) and self.syscall_numbers is not None:
                 if callnum in self.syscall_numbers.syscalls:
                     return self.syscall_numbers.syscalls[callnum]
                 else:
@@ -1333,7 +1335,7 @@ class TaskUtils():
         if self.arm64:
             if arm64_app is None:
                 arm64_app = self.mem_utils.arm64App(self.cpu)
-            if arm64_app:
+            if arm64_app and self.syscall_numbers is not None:
                if callname in self.syscall_numbers.callnums:
                    return self.syscall_numbers.callnums[callname]
                else:

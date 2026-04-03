@@ -404,7 +404,7 @@ def getUnmapped(cpu, instruct, lgr):
     return None
            
    
-def isCall(cpu, instruct, ignore_flags=False): 
+def isCall(instruct):
     if instruct.startswith('call'):
        return True
     else:

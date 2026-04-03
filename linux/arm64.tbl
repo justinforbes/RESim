@@ -291,3 +291,6 @@ NR	SYSCALL NAME	references	x8	ARG0 (x0)	ARG1 (x1)	ARG2 (x2)	ARG3 (x3)	ARG4 (x4)	
 289	pkey_alloc	man/ cs/	121	unsigned long flags	unsigned long init_val	-	-	-	-
 290	pkey_free	man/ cs/	122	int pkey	-	-	-	-	-
 291	statx	man/ cs/	123	int dfd	const char *path	unsigned flags	unsigned mask	struct statx *buffer	-
+384	getrandom	
+397	statx	man/ cs/	123	int dfd	const char *path	unsigned flags	unsigned mask	struct statx *buffer	-
+398	process_vm_writev	

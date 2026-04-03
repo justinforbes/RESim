@@ -164,7 +164,7 @@ class MarkCompare():
                             eip = value
                         else:
                             break
-                    elif self.decode.isCall(self.cpu, instruct[1]):
+                    elif self.decode.isCall(instruct[1]):
                         break
                         
                     else:

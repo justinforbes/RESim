@@ -1,6 +1,7 @@
 import armCond
 import re
 import sys
+import resimUtils
 modsOp0 = ['ldr', 'ldu', 'mov', 'mvn', 'add', 'sub', 'mul', 'and', 'or', 'eor', 'bic', 'rsb', 'adc', 'sbc', 'rsc', 'mla', 'sxt']
 reglist = ['pc', 'lr', 'sp', 'r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'r10', 'r11', 'r12']
 for i in range(0,31):
@@ -295,17 +296,8 @@ def armLDM(cpu, instruct, reg, lgr):
             lgr.debug('reg %s not in %s' % (reg, str(regs)))
     return retval
 
-def isCall(cpu, instruct, ignore_flags=False):
-    N, Z, C, V = armCond.flags(cpu)
-    if instruct.startswith('ble'):
-        return ignore_flags or Z or (N and not V) or (not N and V)
-    elif instruct.startswith('blt'):
-        return ignore_flags or (N and not V) or (not N and V)
-    elif instruct.startswith('blo'):
-        return ignore_flags or (not C)
-    elif instruct.startswith('bls'):
-       return ignore_flags or (not C) or Z
-    elif instruct.startswith('bl'):
+def isCall(instruct):
+    if instruct.startswith('bl ') or instruct.startswith('blr ') or instruct.startswith('blx '):
        return True
     elif instruct.startswith('ldr pc'):
        return True
@@ -314,7 +306,7 @@ def isCall(cpu, instruct, ignore_flags=False):
     return False
 
 def isJump(cpu, instruct, ignore_flags=False):
-    if instruct.startswith('bl'):
+    if instruct.startswith('bl ') or instruct.startswith('blr ') or instruct.startswith('blx '):
         return False
     N, Z, C, V = armCond.flags(cpu)
     if instruct.startswith('beq'):
@@ -337,7 +329,7 @@ def inBracket(op):
     return retval
 
 def isBranch(cpu, instruct):
-    if instruct.startswith('b') or isCall(cpu, instruct) or instruct.startswith('tb') or instruct.startswith('cb'):
+    if instruct.startswith('b') or isCall(instruct) or instruct.startswith('tb') or instruct.startswith('cb'):
         return True
     else:
         return False
@@ -402,16 +394,11 @@ def isScalarAdd(reg, instruct):
     op2, op1 = getOperands(instruct)
     if op1 == reg:
         if mn == 'add':
-            try:
-                retval = int(op2, 16)
-            except:
-                pass
+            retval = resimUtils.hexInt(op2)
         elif mn == 'sub':
-            try:
-                retval = int(op2, 16)
+            retval = resimUtils.hexInt(op2)
+            if retval is not None:
                 retval = retval * -1
-            except:
-                pass
     return retval 
 
 def regLen(reg):
