@@ -345,7 +345,7 @@ class RunTo():
                     return True
         return False
 
-    def toRunningProc(self, proc, want_tid_list, flist, debug_group=False, final_fun=None):
+    def toRunningProc(self, proc, want_tid_list, flist, debug_group=False, final_fun=None, comm=None, run=True):
         ''' intended for use when process is already running '''
         self.debug_group = debug_group
         cpu, comm, tid  = self.task_utils.curThread()
@@ -375,7 +375,14 @@ class RunTo():
 
         # *** SEE returns above ****
         ''' Set breakpoint on current_task to watch task switches '''
-        prec = Prec(cpu, proc, want_tid_list)
+        if want_tid_list is None:
+            if comm is not None:
+                prec = Prec(cpu, proc, None)
+            else:
+                self.lgr.error('runTo toRunningProc want_tid_list is None and so is comm??')
+                return
+        else:
+            prec = Prec(cpu, proc, want_tid_list)
         phys_current_task = self.task_utils.getPhysCurrentTask()
         self.cur_task_break = SIM_breakpoint(cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
                              phys_current_task, self.mem_utils.WORD_SIZE, 0)
@@ -386,18 +393,19 @@ class RunTo():
         hap_clean = hapCleaner.HapCleaner(cpu)
         self.stop_action = hapCleaner.StopAction(hap_clean, breakpoints=[self.cur_task_break], flist=flist)
 
-        status = self.top.is_monitor_running.isRunning()
-        if not status:
-            try:
-                self.lgr.debug('runTo toRunningProc try continue')
-                SIM_continue(0)
-                pass
-            except SimExc_General as e:
-                print('ERROR... try continue?')
-                self.lgr.error('runTo ERROR in toRunningProc  try continue? %s' % str(e))
-                SIM_continue(0)
-        else:
-            self.lgr.debug('runTo toRunningProc thinks it is already running')
+        if run:
+            status = self.top.is_monitor_running.isRunning()
+            if not status:
+                try:
+                    self.lgr.debug('runTo toRunningProc try continue')
+                    SIM_continue(0)
+                    pass
+                except SimExc_General as e:
+                    print('ERROR... try continue?')
+                    self.lgr.error('runTo ERROR in toRunningProc  try continue? %s' % str(e))
+                    SIM_continue(0)
+            else:
+                self.lgr.debug('runTo toRunningProc thinks it is already running')
       
     def stopAlone(self, dumb=None): 
         self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, None)
@@ -411,19 +419,28 @@ class RunTo():
 
         cur_thread = memUtils.memoryValue(self.cpu, memory)
         self.lgr.debug('runToProc cur_thread 0x%x' % cur_thread)
-        tid, comm = self.task_utils.getTidCommFromThreadRec(cur_thread)
+        tid_in, comm = self.task_utils.getTidCommFromThreadRec(cur_thread)
         # prec_tid is a list
-        self.lgr.debug('runToProc look for prec.proc %s prec.tid %s, the current tid is %s cycle: 0x%x' % (prec.proc, prec.tid, tid, self.cpu.cycles))
-        if tid is not None and tid != 0:
-            if (prec.tid is not None and tid in prec.tid) or (prec.tid is None and comm == prec.proc):
-                self.lgr.debug('runTo runToProc got proc %s tid is %s  prec.tid is %s' % (comm, tid, prec.tid))
-                SIM_run_alone(self.cleanToProcHaps, None)
-                #SIM_run_alone(self.toUserAlone, tid)
-                SIM_run_alone(self.top.stopAndCall, self.doStopAction)
+        if tid_in is not None:
+            self.lgr.debug('runToProc look for prec.proc %s prec.tid %s, the current tid is %s cycle: 0x%x' % (prec.proc, prec.tid, tid_in, self.cpu.cycles))
+            if len(prec.tid) == 1 and '-*' in prec.tid[0]:
+                pid_part = tid_in.split('-')[0]
+                tid = pid_part+'-*'
+                self.lgr.debug('runToProc wildcard changed tid from %s to %s' % (tid_in, tid))
             else:
-                #self.proc_list[self.target][tid] = comm
-                #self.lgr.debug('runToProc tid: %d proc: %s' % (tid, comm))
-                pass
+                tid = tid_in
+            if tid is not None and tid != 0:
+                if (prec.tid is not None and tid in prec.tid) or (prec.tid is None and comm == prec.proc):
+                    self.lgr.debug('runTo runToProc got proc %s tid is %s  prec.tid is %s' % (comm, tid, prec.tid))
+                    SIM_run_alone(self.cleanToProcHaps, None)
+                    #SIM_run_alone(self.toUserAlone, tid)
+                    SIM_run_alone(self.top.stopAndCall, self.doStopAction)
+                else:
+                    #self.proc_list[self.target][tid] = comm
+                    #self.lgr.debug('runToProc tid: %d proc: %s' % (tid, comm))
+                    pass
+        else:
+            self.lgr.debug('runToProc cur_thread 0x%x has not tid' % (cur_thread))
 
     def doStopAction(self, dumb=None):
         if self.stop_action is not None:

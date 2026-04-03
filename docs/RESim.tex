@@ -930,6 +930,8 @@ a jumper will reset the reverse execution origin, and thus may not be suitable w
 where a slow-loading component is started into a quiecient state, and then other components are added to the simulation.
 \item {\tt INIT\_FROM\_SNAP} Like RUN\_FROM\_SNAP, but does not restore any of the RESim data from pickle files.  Intended for use when a target is rebooted.
 Create a snapshot when shutdown seems completed and then run from that with this setting so that ASLR and other boot-dependent changes get reassessed.
+\item {\tt ALLOW\_REAL\_EXTERNAL} If the {\tt create\_network} component parameter is used to create a dhcp service node, setting this value
+to TRUE will allow the service node to access external networks via dns and napt"
 
 \end{itemize}
 
@@ -1060,17 +1062,19 @@ Alternately you can connect the ethernet devices to the hub, e.g.,:
 ETH0_SWITCH=hub0
 \end{verbatim}
 
-Ethernet devices on the generic x86 platform default to the {\tt i82559} device defined by Simics.  Use of the {\tt \$eth\_dev=} 
+Ethernet devices on the generic x86 platform default to the {\tt i82559} device defined by Simics on Simics 7 and the i82543gc on Simics 6.  Use of the {\tt \$eth\_dev=} 
 entry lets you pick one of the following alternate ethernet devices:
 \begin{verbatim}
 i82559
 i82546bg
 i82543gc
+dec21041
 \end{verbatim}
 
 If using a VLAN, select the 82559.  The i82543gc does not properly support VLANs.
 Note the 82559 device changes ethernet names, e.g., ens11 becomes ens11f0 and ens12 becomes ens12f0.
 Also, Simics 7 has trouble with the i82543gc, but seems to work with the 82559.
+Windows XP seems only to work with the dec21041
 
 Simics CLI variables are assigned to each computer ethernet link using the convention {\tt \$TARGET\_eth0} where {\tt TARGET}
 is the value of the configuration file section header for that component.  Similarly, connections from the computer to the switches 
@@ -1092,8 +1096,8 @@ though this should be fixed to allow both to be use (see simicsScripts/targets/x
 Refer to the Simics \textit{Ethernet Networking Technology Guide} for details on connecting the simulation to real networks.
 Also see the section in this guide on driver platforms (\ref{driver} and see the limitations described in \ref{real-networks}.  
 By default, the Simics {\tt connect-real-network} command creates a service
-node that provides NAPT forwarding of traffic from targets that can reach the service node.  Unless you want the target to be able to
-reach external networks (e.g., to install packages), consider using {\tt service\_node.sn->napt\_enable = 0} to disable NAPT.
+node that provides NAPT forwarding of traffic from targets that can reach the service node.  If you want the target to be able to
+reach external networks (e.g., to install packages), use the {\tt ALLOW\_REAL\_EXTERNAL} environment value, otherwise real dns and napt are disabled.
 
 \subsubsection{DHCP}
 \label{DHCP}
@@ -3168,7 +3172,8 @@ then restores them and copies them to the merged directory.
 \item winProgSizes.py -- Use this to create a file you will name with the WORD\_SIZES target value in an ini file.  The utility will parse a log file 
 to determine the names of programs that are created, and it will then look in your ROOT\_PREFIX directory for those to determine whether the program is 32 or
 64 bit.  Use the {\tt runToCall('CreateUserProcess', linger=True)} command to generate a suitable log file for parsing.
-\item buildExecDict.py -- Builds a dictionary of executable files.
+\item buildExecDict.py -- Builds a dictionary of executable files relative to ROOT\_PREFIX.  This is an optimization for Windows systems that tend to have zillions of
+files, aiding the system in locating files named in a debugProc.  Run this from the workspace naming the ini file.
 \item findProgRename.py -- Read a trace file to find SET\_NAME operations that change the comm of a thread.  Creates a json of those in the analysis directory
 which is then used by RESim to equate the comms.
 \item arch-tar.sh -- Archive fuzzing artifacts and optionally a workspace.  See the script for details.
@@ -4137,6 +4142,10 @@ Windows page table management differs from Linux in that directory table entries
 set a break on the start of a table directory.  When that break it hit, we can then wait until a return to user mode at which time the
 table will be populated.  Windows seems to update table entries individually.  This requires divergence in the coverage module.  Or maybe this is just a 32/64 bit thing.
 
+\subsection{Windows program names}
+Windows case-insensitive file naming can lead to extremely slow responses to {\tt debugProc}, which must find the program under the root prefix.  Use the
+buildExecDict.py utility to optimize these searches.
+
 \subsection{Windows Kernel Parameters}
 The {\tt getKernelParams.py} program creates {\tt param} files containing Windows kernel parameters required by RESim.  These include the address hit by the {\tt sysenter} instruction, 
 the instruction from which the kernel returns to user space, and values needed to reflect the jump table used by the kernel to vector different system calls to their respective
@@ -4554,6 +4563,116 @@ which is odd because the breakpoint in question is set on a physical address.  T
 Work-around is to delete the breakpoint, otherwise Simics reports too many errors and dies.
 
 Data tracking breaks.  It looks like the ppc32 model gets confused on cycles.
+
+\section{Windows XP (32 bit)}
+Parameters passed to the kernel via user stack.
+User space sp is in edx on entry.
+
+Kernel addresses from 0x80000000 to light
+Kernel space frame at 0xffdff040?
+\begin{verbatim}
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d540 p:0x00053d540  mov ecx,0x23
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d545 p:0x00053d545  push 48
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d547 p:0x00053d547  pop fs
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d549 p:0x00053d549  mov ds,cx
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d54b p:0x00053d54b  mov es,cx
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d54d p:0x00053d54d  mov ecx,dword ptr [0xffdff040]
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d553 p:0x00053d553  mov esp,dword ptr [ecx+0x4]
+...
+Current task?
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d573 p:0x00053d573  mov ebx,dword ptr [0xffdff01c]
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d579 p:0x00053d579  push 59
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d57b p:0x00053d57b  mov esi,dword ptr [ebx+0x124]
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d581 p:0x00053d581  push dword ptr [ebx]
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d583 p:0x00053d583  mov dword ptr [ebx],0xffffffff
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d589 p:0x00053d589  mov ebp,dword ptr [esi+0x18]
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d58c p:0x00053d58c  push 1
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d58e p:0x00053d58e  sub esp,0x48
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d591 p:0x00053d591  sub ebp,0x29c
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d597 p:0x00053d597  mov byte ptr [esi+0x140],0x1
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d59e p:0x00053d59e  cmp ebp,esp
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5a0 p:0x00053d5a0  jne 0x8053d53c
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5a2 p:0x00053d5a2  and dword ptr [ebp+0x2c],0x0
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5a6 p:0x00053d5a6  test byte ptr [esi+0x2c],0xff
+
+...
+Computed jump:
+  esi_value = readWord(ptr_to_current_thread + 0x124)(
+  esi_adjusted = esi_value + 0xe0
+  edi_adjust = readWord(edi_adjusted)
+  edi_start = ((call_num >> 8) & 0x30) + esi_adjust
+  val_in_edi = readWord(edi_start)
+  call_to_addr = val_in_edi + 4*call_num
+  call_to = readWord(call_to_addr)
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d61e p:0x00053d61e  mov ebx,dword ptr [edi+eax*4]
+
+ESI value based on ebx from hardcode
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d57b p:0x00053d57b  mov esi,dword ptr [ebx+0x124]
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d581 p:0x00053d581  push dword ptr [ebx]
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d583 p:0x00053d583  mov dword ptr [ebx],0xffffffff
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d589 p:0x00053d589  mov ebp,dword ptr [esi+0x18]
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d58c p:0x00053d58c  push 1
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d58e p:0x00053d58e  sub esp,0x48
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d591 p:0x00053d591  sub ebp,0x29c
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d597 p:0x00053d597  mov byte ptr [esi+0x140],0x1
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d59e p:0x00053d59e  cmp ebp,esp
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5a0 p:0x00053d5a0  jne 0x8053d53c
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5a2 p:0x00053d5a2  and dword ptr [ebp+0x2c],0x0
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5a6 p:0x00053d5a6  test byte ptr [esi+0x2c],0xff
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5aa p:0x00053d5aa  mov dword ptr [esi+0x134],ebp
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5b0 p:0x00053d5b0  jne 0x8053d400
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5b6 p:0x00053d5b6  mov ebx,dword ptr [ebp+0x60]
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5b9 p:0x00053d5b9  mov edi,dword ptr [ebp+0x68]
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5bc p:0x00053d5bc  mov dword ptr [ebp+0xc],edx
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5bf p:0x00053d5bf  mov dword ptr [ebp+0x8],0xbadb0d00
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5c6 p:0x00053d5c6  mov dword ptr [ebp],ebx
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5c9 p:0x00053d5c9  mov dword ptr [ebp+0x4],edi
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5cc p:0x00053d5cc  sti
+
+get edi value IS fuction of eax!
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5cd p:0x00053d5cd  mov edi,eax
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5cf p:0x00053d5cf  shr edi,8
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5d2 p:0x00053d5d2  and edi,0x30
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5d5 p:0x00053d5d5  mov ecx,edi
+
+Adjust edi based on esi value
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5d7 p:0x00053d5d7  add edi,dword ptr [esi+0xe0]
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5dd p:0x00053d5dd  mov ebx,eax
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5df p:0x00053d5df  and eax,0xfff
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5e4 p:0x00053d5e4  cmp eax,dword ptr [edi+0x8]
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5e7 p:0x00053d5e7  jae 0x8053d332
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5ed p:0x00053d5ed  cmp ecx,0x10
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5f0 p:0x00053d5f0  jne 0x8053d60c
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5f2 p:0x00053d5f2  mov ecx,dword ptr [0xffdff018]
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5f8 p:0x00053d5f8  xor ebx,ebx
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d5fa p:0x00053d5fa  or ebx,dword ptr [ecx+0xf70]
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d600 p:0x00053d600  je 0x8053d60c
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d60c p:0x00053d60c  inc dword ptr [0xffdff638]
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d612 p:0x00053d612  mov esi,edx
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d614 p:0x00053d614  mov ebx,dword ptr [edi+0xc]
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d617 p:0x00053d617  xor ecx,ecx
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d619 p:0x00053d619  mov cl,byte ptr [eax+ebx]
+
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d619 p:0x00053d619  mov cl,byte ptr [eax+ebx]
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d61c p:0x00053d61c  mov edi,dword ptr [edi]
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d61e p:0x00053d61e  mov ebx,dword ptr [edi+eax*4]
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d621 p:0x00053d621  sub esp,ecx
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d623 p:0x00053d623  shr ecx,2
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d626 p:0x00053d626  mov edi,esp
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d628 p:0x00053d628  cmp esi,dword ptr [0x805589d4]
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d62e p:0x00053d62e  jae 0x8053d7dc
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d634 p:0x00053d634  rep movsd 
+[board.mb.cpu0.core[0][0]] cs:0x000000008053d636 p:0x00053d636  call ebx
+
+\end{verbatim}
+
+Windows XP has no drivers for the x86 platfrom motherboard ethernet.  It has drivers
+for the others, but they windows reports error 10, unable to use the device.
+Trial and error showed that the am79c973 controller is recognized, but it hangs during configuration.
+The dec21041 appears to work.
+
+Windows XP changes syscall number mapping frequently.  The ntdll.dll does the mapping.  The 
+RESim/windows/winxpSyscalls.py reads the ntdll.dll and generates a json map of call numbers to calls.
 
 \end{appendices}
 %\printIndex

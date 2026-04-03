@@ -450,9 +450,13 @@ class GenMonitor():
             for cell_name in comp_dict:
                 self.lgr.debug('genInit snapshot load target %s' % cell_name)
                 param_file = os.path.join('./', self.run_from_snap, cell_name, 'param.pickle')
+                force_param = self.getCompDict(cell_name, 'FORCE_PARAM')
                 # Ignore pickle file for vxworks (for now anyway)
                 if 'OS_TYPE' in comp_dict[cell_name] and comp_dict[cell_name]['OS_TYPE'].startswith('VXW'):
                     self.param[cell_name] = vxParam.VxParam()
+                elif resimUtils.yesNoTrueFalse(force_param): 
+                    # TBD breaks aslr adjustments?
+                    self.lgr.debug('Ignoring snapshot param fir for cell %s, force use of latest param file')
                 elif os.path.isfile(param_file):
                     self.param[cell_name] = pickle.load(open(param_file, 'rb'))
                     self.lgr.debug('Loaded params for cell %s from pickle' % cell_name)
@@ -531,7 +535,7 @@ class GenMonitor():
             word_size = 4
             if 'OS_TYPE' in comp_dict[cell_name]:
                 self.os_type[cell_name] = comp_dict[cell_name]['OS_TYPE']
-                if self.os_type[cell_name] == 'LINUX64' or self.os_type[cell_name].startswith('WIN'):
+                if self.os_type[cell_name] == 'LINUX64' or self.os_type[cell_name].startswith('WIN7'):
                     word_size = 8
                 self.lgr.debug('Cell %s os type %s' % (cell_name, self.os_type[cell_name]))
 
@@ -793,7 +797,7 @@ class GenMonitor():
             f1 = stopFunction.StopFunction(stop_action.wrong_tid_action, [], nest=False, match_tid=True)
             new_stop_action = hapCleaner.StopAction(hap_clean, tid=stop_action.tid, wrong_tid_action=stop_action.wrong_tid_action)
             SIM_run_alone(self.revToTid, stop_action)
-        else:
+        elif not self.reverseEnabled():
             self.lgr.debug('genMonitor stopHap enable-vmp')
             SIM_run_command('enable-vmp')
 
@@ -987,7 +991,9 @@ class GenMonitor():
                         unistd, unistd32, self.run_from_snap, self.lgr, root_prefix=root_prefix)
                     self.task_utils[cell_name] = task_utils
                 elif self.isWindows(target=cell_name):
-                    self.task_utils[cell_name] = winTaskUtils.WinTaskUtils(cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], self.run_from_snap, self.lgr) 
+                    os_type = self.comp_dict[cell_name]['OS_TYPE']
+                    self.task_utils[cell_name] = winTaskUtils.WinTaskUtils(self, cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], 
+                         self.run_from_snap, os_type, self.lgr) 
                 elif self.isVxDKM(target=cell_name):
                     self.task_utils[cell_name] = vxKTaskUtils.VxKTaskUtils(cpu, cell_name, self.mem_utils[cell_name], self.comp_dict[cell_name], self.run_from_snap, self.lgr) 
                 else:
@@ -1090,7 +1096,8 @@ class GenMonitor():
                         continue
                     if True:
                         if self.isWindows(cell_name):
-                            task_utils = winTaskUtils.WinTaskUtils(cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], self.run_from_snap, self.lgr) 
+                            os_type = self.comp_dict[cell_name]['OS_TYPE']
+                            task_utils = winTaskUtils.WinTaskUtils(self, cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], self.run_from_snap, os_type, self.lgr) 
                             swapper = task_utils.getSystemProcRec()
                         else: 
                             unistd = None
@@ -1145,8 +1152,13 @@ class GenMonitor():
                 cmd = 'c %s cycles' % run_cycles
                 #dumb, ret = cli.quiet_run_command(cmd)
                 SIM_continue(run_cycles)
-                self.lgr.debug('back from continue dumb %s ret %s' % (dumb, ret))
+                self.lgr.debug('back from continue dumb %s ret %s hack_count %d' % (dumb, ret, hack_count))
                 run_cycles = self.getBootCycleChunk()
+                hack_count = hack_count + 1
+                cpl = memUtils.getCPL(cpu)
+                #if hack_count > 30 and cpl == 0:
+                #   print('FAILED')
+                #   return
             else: 
                 self.lgr.debug('doInit done, call runScripts')
         self.runScripts()
@@ -1589,6 +1601,9 @@ class GenMonitor():
                         ''' Assumes winProg has already populated soMap'''
                         # Note this call will add the text section after getting the load address from the peb
                         load_info = self.soMap[self.target].getLoadInfo()
+                        if load_info is None and prog_name.endswith('exe'):
+                            self.lgr.error('debug failed to get load_info for %s, fatal' % prog_name)
+                            return
                     elif self.isVxDKM(target=self.target):
                         load_info = self.soMap[self.target].getModuleInfo(prog_name)
                     else:
@@ -1621,6 +1636,7 @@ class GenMonitor():
                         self.lgr.error('debug, text segment missing load address for %s.  Perhaps program was running before being debugged?' % self.full_path)
 
                     else:
+                        self.lgr.debug('debug, load info for %s was None, see if this is python' % prog_name)
                         python_path = resimUtils.getPyPath(self.full_path)
                         if python_path is not None and os.path.basename(python_path) == 'python':
                             pylib = 'libpython'
@@ -1884,13 +1900,19 @@ class GenMonitor():
 
     def toProc(self, proc, binary=False, run=True, new=False):
         self.rmDebugWarnHap()
+        self.checkOnlyIgnore()
         plist = self.task_utils[self.target].getTidsForComm(proc, ignore_exits=True)
+        self.lgr.debug('toProc %s len of plist is %d' % (proc, len(plist)))
         if not new and len(plist) > 0 and not (len(plist)==1 and self.task_utils[self.target].isExitTid(plist[0])):
             self.lgr.debug('toProc process %s found, run until some instance is scheduled' % proc)
             print('%s is running as %s.  Will continue until some instance of it is scheduled' % (proc, plist[0]))
             f1 = stopFunction.StopFunction(self.toUser, [], nest=True)
             flist = [f1]
-            self.run_to[self.target].toRunningProc(proc, plist, flist)
+            if len(plist) == 1 and '-*' in plist[0]:
+                # proc is in the proc list, but no TIDs yet.  Run to the comm
+                self.run_to[self.target].toRunningProc(proc, None, flist, comm=proc, run=run)
+            else:
+                self.run_to[self.target].toRunningProc(proc, plist, flist, run=run)
         else:
             cpu = self.cell_config.cpuFromCell(self.target)
         
@@ -2035,7 +2057,8 @@ class GenMonitor():
             if prog != leader_prog:
                 self.lgr.debug('debugTidGroup prog %s does not match leader %s, remove it' % (prog, leader_prog))
                 tid_list.remove(l_tid)
-      
+        if leader_tid not in tid_list:
+            tid_list.append(leader_tid)
         self.lgr.debug('debugTidGroup cell %s tid:%s found leader %s and %d tids' % (self.target, tid, leader_tid, len(tid_list)))
         if len(tid_list) == 0:
             self.lgr.error('debugTidGroup tid:%s not on current target?' % tid)
@@ -4275,28 +4298,28 @@ class GenMonitor():
         if not os.path.isfile(fname):
             print('No file at %s' % fname)
             return
-        cpu = self.cell_config.cpuFromCell(self.target)
         with open(fname, 'rb') as fh:
             bstring = fh.read()
-            self.writeBytes(cpu, addr, bstring)
+            self.writeBytes(addr, bstring)
             if watch:
                 self.watchData(start=addr, length=len(bstring))
                 print('Data watch set of 0x%x' % addr)
       
 
-    def writeBytes(self, cpu, address, bstring, target_cpu=None):
+    def writeBytes(self, address, bstring, target_cpu=None):
         if self.no_reset is not None:
             SIM_break_simulation('no reset')
             print('Would reset origin, bail')
             return
         if target_cpu is None:
             target = self.target
+            target_cpu = self.cell_config.cpuFromCell(self.target)
         else:
             target = self.cell_config.cellFromCPU(target_cpu)
         if target in self.task_utils:
             ''' NOTE: wipes out bookmarks! '''
             cpu, comm, tid = self.task_utils[target].curThread() 
-            self.mem_utils[target].writeBytes(cpu, address, bstring)
+            self.mem_utils[target].writeBytes(target_cpu, address, bstring)
             self.lgr.debug('writeBytes, disable reverse execution to clear bookmarks, then set origin')
             self.clearBookmarks()
 
@@ -6378,10 +6401,12 @@ class GenMonitor():
             platform = self.comp_dict[self.target]['PLATFORM']
         return platform
 
-    def getTargetEnv(self, name):
+    def getTargetEnv(self, name, target=None):
         retval = None
-        if name in self.comp_dict[self.target]:
-            retval = self.comp_dict[self.target][name]
+        if target is None:
+            target = self.target
+        if name in self.comp_dict[target]:
+            retval = self.comp_dict[target][name]
         return retval
 
     def getReadAddr(self):
@@ -6651,7 +6676,7 @@ class GenMonitor():
         print('cs 0x%x' % cs)
 
     def findThreads(self):
-        thread_dict = self.task_utils[self.target].findThreads(quiet=False)
+        thread_dict = self.task_utils[self.target].findThreads()
         return thread_dict
 
     def showThreads(self):
@@ -6698,12 +6723,14 @@ class GenMonitor():
         self.lgr.debug('setFullPath to %s' % full_path)
 
     def ignoreProgList(self):
+        self.lgr.debug('ignoreProgList') 
         retval = False
         if 'SKIP_PROGS' in self.comp_dict[self.target]: 
             sfile = self.comp_dict[self.target]['SKIP_PROGS']
             retval = self.context_manager[self.target].loadIgnoreList(sfile)
             if retval:
                 print('Loaded list of programs to ignore from %s' % sfile)
+                self.lgr.debug('ignoreProgList Loaded list of programs to ignore from %s' % sfile)
         return retval
 
     def ignoreThreadList(self):
@@ -7325,6 +7352,17 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         pc = self.mem_utils[self.target].getKReturnAddr(cpu)
         print('ELR is 0x%x' % pc)
+
+    def osType(self, target):
+        return self.os_type[target]
+
+    def mftx(self):
+        thread_list = self.task_utils[self.target].getThreadList()
+    def mfty(self):
+        thread_list = self.task_utils[self.target].findThreads()
+        #proc = self.getCurProcRec()
+        #thread_list = self.task_utils[self.target].getThreadList(proc=proc)
+
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

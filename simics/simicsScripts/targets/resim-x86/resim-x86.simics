@@ -9,8 +9,8 @@ decl {
   default serial_console_fg_color = "#80ff80"
   default disk0_size = NIL
   default disk1_size = 8Gi
-  #default rtc_time = "auto"
-  default rtc_time = "2008-06-05 23:52:01 UTC"
+  default rtc_time = "auto"
+  #default rtc_time = "2008-06-05 23:52:01 UTC"
   default create_usb_tablet = TRUE
 
 # params from "qsp-uefi.include"
@@ -36,6 +36,8 @@ decl {
  ! Automatically log in as a "root" user on the serial console. When
  ! the parameter is set it overrides the "auto_login" parameter.
 
+ param enable_efi : bool = FALSE
+
  result system : string
  result eth_link : string or nil
  result service_node : string or nil
@@ -45,9 +47,19 @@ decl {
  result eth3 : string
 }
 # RESIM
-#$bios_image="targets/x58-ich10/images/seabios-simics-x58-ich10-ata-1.11-20180508.bin"
-$bios_image="targets/x58-ich10/images/seabios-simics-x58-ich10-sata-1.11-20180508.bin"
-$vga_bios_image="targets/x58-ich10/images/seavgabios-simics-x58-ich10-1.11-20180508.bin"
+#  default bios_image =
+#   "%simics%/targets/qsp-x86/images/SIMICSX58IA32X64_1_1_0_r.fd"
+#  default enable_efi = TRUE
+
+if $enable_efi{
+   $bios_image="%simics%/targets/qsp-x86/images/SIMICSX58IA32X64_1_1_0_r.fd"
+   $enable_efi = TRUE
+   echo "EFI ENABLED *******"
+}else{
+    #$bios_image="targets/x58-ich10/images/seabios-simics-x58-ich10-ata-1.11-20180508.bin"
+    $bios_image="targets/x58-ich10/images/seabios-simics-x58-ich10-sata-1.11-20180508.bin"
+    $vga_bios_image="targets/x58-ich10/images/seavgabios-simics-x58-ich10-1.11-20180508.bin"
+}
 $disk0_image=$disk_image
 
 ## This check avoids low-memory issues that are very difficult to diagnose.

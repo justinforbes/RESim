@@ -73,6 +73,7 @@ class WinMonitor():
         self.call_traces = {}
         self.trace_all = None
         self.w7_call_params = None
+        self.lgr.debug('winMonitor fo rcell %s' % cell_name)
 
 
     def getWin7CallParams(self, stop_on, only, only_proc, track_params, this_tid=False):
@@ -88,9 +89,15 @@ class WinMonitor():
  
 
     def toCreateProc(self, comm=None, flist=None, binary=False, break_simulation=True, run=True):
-        ''' Use syscallManager to catch a CreateUserProcess '''
+        if self.top.osType(self.cell_name) == 'WINXP':
+            call_name = 'CreateProcessEx'
+            call_list = [call_name, 'OpenFile', 'CreateSection']
+        else:
+            call_name = 'CreateUserProcess'
+            call_list = [call_name]
+        ''' Use syscallManager to catch a CreateUserProcess or CreateProcessEx '''
         if comm is not None:    
-            params = syscall.CallParams('toCreateProc', 'CreateUserProcess', comm, break_simulation=break_simulation) 
+            params = syscall.CallParams('toCreateProc', call_name, comm, break_simulation=break_simulation) 
             if binary:
                 params.param_flags.append('binary')
             call_params = [params]
@@ -98,8 +105,8 @@ class WinMonitor():
             call_params = []
             self.traceMgr.open('/tmp/execve.txt', self.cpu)
 
-        self.syscallManager.watchSyscall(None, ['CreateUserProcess'], call_params, 'CreateUserProcess', flist=flist)
-        self.lgr.debug('winMonitor toCreateProc did call to watch createUserProcess')
+        self.syscallManager.watchSyscall(None, call_list, call_params, call_name, flist=flist)
+        self.lgr.debug('winMonitor toCreateProc did call to watch %s' % call_name)
         if run:
             SIM_continue(0)
 
@@ -226,10 +233,17 @@ class WinMonitor():
     def traceWindows(self):
         tf = 'logs/trace_windows.txt'
         self.traceMgr.open(tf, self.cpu)
-        call_list = ['CreateUserProcess', 'CreateThread', 'CreateThreadEx', 'ConnectPort', 'AlpcConnectPort', 'OpenFile', 'CreateFile', 'CreateSection', 'MapViewOfSection',
-                         #'CreatePort', 'AcceptConnectPort', 'ListenPort', 'AlpcAcceptConnectPort', 'RequestPort', 'DeviceIoControlFile', 'WaitForMultipleObjects32',
-                         'CreatePort', 'AcceptConnectPort', 'ListenPort', 'AlpcAcceptConnectPort', 'RequestPort', 'DeviceIoControlFile', 
+        call_list = ['CreateThread', 'ConnectPort', 'OpenFile', 'CreateFile', 'CreateSection', 'MapViewOfSection',
+                         'CreatePort', 'AcceptConnectPort', 'ListenPort', 'RequestPort', 'DeviceIoControlFile', 
                          'DuplicateObject', 'ReadFile', 'WriteFile', 'TerminateProcess', 'TerminateThread']
+        if self.top.osType(self.cell_name)  == 'WINXP':
+            call_list.append('CreateProcess') 
+            call_list.append('CreateProcessEx') 
+        else:
+            call_list.append('CreateUserProcess') 
+            call_list.append('CreateThreadEx') 
+            call_list.append('AlpcConnectPort') 
+            call_list.append('AlpcAcceptConnectPort') 
         ''' Use cell of None so only our threads get tracked '''
         call_params = []
         retval = self.syscallManager.watchSyscall(None, call_list, call_params, 'traceWindows', stop_on_call=False, trace=True, linger=True)

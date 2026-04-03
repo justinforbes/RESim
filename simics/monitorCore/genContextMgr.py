@@ -212,6 +212,8 @@ class GenContextMgr():
         self.nowatch_list = []
         self.suspend_watch_list = []
         self.watching_tasks = False
+        # hack for windows threads not yet in list
+        self.pending_watch_rec = None
         self.single_thread = False
         self.lgr = lgr
         self.ida_message = None
@@ -578,7 +580,7 @@ class GenContextMgr():
         if self.isSuspended(new_task):
             SIM_run_alone(self.restoreSuspendContext, None)
             #self.restoreSuspendContext()
-        elif new_task in self.watch_rec_list:
+        elif new_task in self.watch_rec_list or new_task == self.pending_watch_rec:
             if not self.isDebugContext() and self.debugging_tid is not None:
                 #self.lgr.debug('contextManager alterWatches restore RESim context tid:%s' % tid)
                 #SIM_run_alone(self.restoreDebugContext, None)
@@ -704,17 +706,28 @@ class GenContextMgr():
         thread_id = None
         if self.top.isWindows(target=self.cell_name):
             ptr = new_addr + self.param.proc_ptr
+            #self.lgr.debug('contextManager changedThread ptr is 0x%x' % ptr)
             phys_block = cpu.iface.processor_info.logical_to_physical(ptr, Sim_Access_Read)
+            #self.lgr.debug('contextManager changedThread phys addr is 0x%x' % phys_block.address)
             proc_addr = self.mem_utils.readPhysPtr(self.cpu, phys_block.address)
+            #self.lgr.debug('contextManager changedThread proc_addr 0x%x' % proc_addr)
             if proc_addr is None:
                 self.lgr.debug('contextManager changedThread proc_addr is None reading from ptr 0x%x' % ptr)
                 return
+            if proc_addr == 0:
+                self.lgr.debug('contextManager changedThread proc_addr is zero reading from ptr 0x%x' % ptr)
+                return
             pid = self.mem_utils.readWord32(cpu, proc_addr + self.param.ts_pid)
+            if pid is None:
+                self.lgr.debug('contextManager changedThread proc_addr bad pid read for proc addr 0x%x' % proc_addr)
             thread_id = self.task_utils.getThreadId(rec=new_addr)
+            if thread_id is None:
+                self.lgr.debug('contextManager changedThread proc_addr bad thread_id read for proc addr 0x%x' % proc_addr)
             if pid is not None and thread_id is not None:
                 tid = '%d-%d' % (pid, thread_id)
             else:
                 self.lgr.debug('contextManager bad pid %s or thread_id %s' % (pid, thread_id))
+                return
         else:
            proc_addr = new_addr
            tid = str(self.mem_utils.readWord32(cpu, proc_addr + self.param.ts_pid))
@@ -1402,6 +1415,7 @@ class GenContextMgr():
             ''' suspect the thread is in the kernel, e.g., on a syscall, and has not yet been formally scheduled, and thus
                 has no place in the task list? OR all threads share the same next_ts pointer'''
             self.lgr.debug('contextManager watchExit failed to get list_addr tid %s cur_tid %s rec 0x%x' % (tid, cur_tid, rec))
+            self.pending_watch_rec = rec
             return False
         
         if tid not in self.task_rec_bp or self.task_rec_bp[tid] is None:
@@ -1675,10 +1689,11 @@ class GenContextMgr():
                 self.lgr.error('contextManager loadIgnoreList no file at %s' % fname)
         if retval:
             cur_tid = self.task_utils.curTID()
-            comm = self.task_utils.getCommFromTid(cur_tid) 
-            if comm in self.ignore_progs:
-                self.lgr.debug('contextManager loadIgnoreList current comm of %s should be ignored, so set ignore context' % comm)
-                self.restoreIgnoreContext()
+            if cur_tid is not None:
+                comm = self.task_utils.getCommFromTid(cur_tid) 
+                if comm in self.ignore_progs:
+                    self.lgr.debug('contextManager loadIgnoreList current comm of %s should be ignored, so set ignore context' % comm)
+                    self.restoreIgnoreContext()
 
         return retval
 
@@ -1737,8 +1752,10 @@ class GenContextMgr():
             Intended for cases where comm is not yet running.
         '''
         prog_comm = self.task_utils.progComm(prog)
-        self.watch_for_prog.append(prog_comm)
-        self.watch_for_prog_callback[prog_comm] = callback
+        if prog_comm not in self.watch_for_prog:
+            self.watch_for_prog.append(prog_comm)
+            self.watch_for_prog_callback[prog_comm] = []
+        self.watch_for_prog_callback[prog_comm].append(callback)
         self.setTaskHap()
         self.lgr.debug('contextManager callWhenFirstScheduled comm %s' % prog_comm)
 
@@ -1758,8 +1775,8 @@ class GenContextMgr():
                 self.lgr.debug('contextManager checkFirstSchedule got first for tid:%s (%s)' % (tid, comm))
                 self.watch_for_prog.remove(comm)
                 # make the callback call.  TBD only one callback per comm
-                callback = self.watch_for_prog_callback[comm]
-                self.top.doInUser(callback, None, tid=tid, target=self.cell_name)
+                callback_list = self.watch_for_prog_callback[comm]
+                self.top.doInUser(callback_list, tid, tid=tid, target=self.cell_name)
                 del self.watch_for_prog_callback[comm]
 
 

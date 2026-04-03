@@ -34,7 +34,7 @@ def getProg(prog, quiet=False):
             if not got_one:
                 print('%s not in exec_dict' % prog)
     else: 
-        sys.stderr.write('No exec_list.json found at %s\n' % exec_json_path)
+        sys.stderr.write('No exec_dict.json found at %s\n' % exec_json_path)
         exit(1)
     return retval
 

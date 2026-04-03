@@ -3337,7 +3337,7 @@ class Syscall():
 
     def setExits(self, frames, origin_reset=False, context_override=None):
         ''' set exits for a list of frames, intended for tracking when syscall has already been made and the process is waiting '''
-        cpu, comm, cur_tid = self.task_utils.curThread() 
+        cpu, cur_comm, cur_tid = self.task_utils.curThread() 
         eip = self.top.getEIP()
         self.lgr.debug('setExits cur_tid: %s eip: 0x%x cycles: 0x%x' % (cur_tid, eip, self.cpu.cycles))
         for tid in frames:
@@ -3357,7 +3357,7 @@ class Syscall():
                 if eip in [exit_eip1, exit_eip2, exit_eip3]:
                     self.lgr.debug('sharedSyscall  tid:%s setExits is current thread about to exit, skip this one' % tid)
                     continue   
-
+            comm = self.task_utils.getCommFromTid(tid)
             exit_info = ExitInfo(self, self.cpu, tid, comm, callnum, callname, False, frame)
             exit_info.retval_addr = frames[tid]['param2']
             exit_info.count = frames[tid]['param3']

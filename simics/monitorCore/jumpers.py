@@ -150,23 +150,6 @@ class Jumpers():
         if ':' not in line:
             raise Exception("jumpers Error reading %s from %s, bad jumper expected colon" % (line, fname))
             return False
-        lib_addr = parts[0]
-        prog = addr = to_addr = None
-        try:
-            prog, addr = lib_addr.split(':') 
-        except:
-            self.lgr.error("jumpers Error reading %s from %s, bad jumper, expected only one colon after prog" % (line, fname))
-            raise Exception("jumpers Error reading %s from %s, bad jumper" % (line, fname))
-            return False
-        
-        try:
-            from_addr = int(addr, 16)
-            to_addr = int(parts[1], 16)
-        except:
-            self.lgr.error("jumpers Error reading %s from %s, bad jumper" % (line, fname))
-            raise Exception("jumpers Error reading %s from %s, bad jumper" % (line, fname))
-            return False
-
         comm = None
         break_at_dest = False
         break_at_load = False
@@ -207,6 +190,33 @@ class Jumpers():
                     break_at_dest = True
                 else:
                     break_at_load = True
+
+        lib_addr = parts[0]
+        prog = addr = to_addr = None
+        try:
+            prog, addr = lib_addr.split(':') 
+        except:
+            self.lgr.error("jumpers Error reading %s from %s, bad jumper, expected only one colon after prog" % (line, fname))
+            raise Exception("jumpers Error reading %s from %s, bad jumper" % (line, fname))
+            return False
+        
+        try:
+            from_addr = int(addr, 16)
+        except:
+            self.lgr.error("jumpers Error reading %s from %s, bad jumper" % (line, fname))
+            raise Exception("jumpers Error reading %s from %s, bad jumper" % (line, fname))
+            return False
+
+        if replace:
+            # use a byte array to hold the replacement bytes
+            to_addr = bytearray.fromhex(parts[1])
+        else:
+            try:
+                to_addr = int(parts[1], 16)
+            except:
+                self.lgr.error("jumpers Error reading %s from %s, bad jumper" % (line, fname))
+                raise Exception("jumpers Error reading %s from %s, bad jumper" % (line, fname))
+                return False
 
         jump_rec = self.JumperRec(prog, comm, from_addr, to_addr, break_at_dest, break_at_load, patch, replace) 
         if resimUtils.isSO(prog):
@@ -378,10 +388,11 @@ class Jumpers():
                 return 
 
         elif jump_rec.replace:
-            self.lgr.debug('jumper setProgJumpers replace instruct at 0x%x with 0x%x' % (addr, jump_rec.to_addr))
-            self.top.writeWord32(addr, jump_rec.to_addr, target_cpu=self.cpu)
-            print('replaced address 0x%x with word 0x%x' % (addr, jump_rec.to_addr))
-            self.lgr.debug('jumper setProgJumper replaced address 0x%x with word 0x%x' % (addr, jump_rec.to_addr))
+            self.lgr.debug('jumper setProgJumpers replace instruct at 0x%x with %s' % (addr, jump_rec.to_addr.hex()))
+            #self.top.writeWord32(addr, jump_rec.to_addr, target_cpu=self.cpu)
+            self.top.writeBytes(addr, jump_rec.to_addr, target_cpu=self.cpu)
+            print('replaced address 0x%x with byte array %s' % (addr, jump_rec.to_addr.hex()))
+            self.lgr.debug('jumper setProgJumper replaced address 0x%x with byte array %s' % (addr, jump_rec.to_addr.hex()))
         else:
             phys = self.mem_utils.v2p(self.cpu, addr)
             if phys is not None and phys != 0:
@@ -577,7 +588,7 @@ class Jumpers():
                 addr = self.mem_utils.getRegValue(self.cpu, reg_set_rec.reg)
                 bstring = binascii.unhexlify(reg_set_rec.value.encode())
                 #self.top.writeString(addr, bstring, target_cpu=self.cpu)
-                self.top.writeBytes(self.cpu, addr, bstring)
+                self.top.writeBytes(addr, bstring, target_cpu=self.cpu)
                 self.lgr.debug('jumper RegSet indirect wrote %s to 0x%x' % (reg_set_rec.value, addr))
             else:
                 self.lgr.debug('jumper RegSet comm %s hit 0x%x would update reg %s to 0x%x' % (comm, memory.logical_address, reg_set_rec.reg, reg_set_rec.value)) 

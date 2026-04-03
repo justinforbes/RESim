@@ -138,6 +138,7 @@ def isConstant(s):
     return is_integer
 
 def adjustRegInBrackets(s, lgr):
+    ''' return a register found in brackets if it is alone, or adjusted by a contant, otherwise return None'''
     retval = None
     if '[' in s:
         content = s.split('[', 1)[1].split(']')[0]
@@ -219,7 +220,11 @@ def getOperands(instruct):
     else:
         ret2 = parts_comma[1].strip()
         if '[' in ret2 and 'ptr' in ret2:
-            ret2 = '[' + ret2.split('[')[1]
+            if ':' in ret2:
+                # e.g., dword ptr fs:[0x1c]
+                ret2 = ret2.split()[-1]
+            else:
+                ret2 = '[' + ret2.split('[')[1]
         #parts = parts[0].split(' ')
         #ret1 = parts[len(parts) - 1]
         ret1 = parts_comma[0].split(' ',1)[1].strip()
@@ -432,6 +437,30 @@ def isDirectMove(instruct):
                 retval = True
             except:
                 pass
+    return retval
+
+def getDirectHardMove(instruct):
+    retval = None
+    if getMn(instruct).startswith('mov'): 
+        op2, op1 = getOperands(instruct)
+        if op2.startswith('[') and op2.endswith (']'):
+            content =  op2.split('[', 1)[1].split(']')[0]
+            try:
+                val = int(content, 16)
+                retval = val
+            except:
+                pass
+    return retval
+
+def getRegRelative(instruct, reg):
+    retval = None
+    if getMn(instruct).startswith('mov'): 
+        op2, op1 = getOperands(instruct)
+        if op2.startswith('[') and op2.endswith (']'):
+            content =  op2.split('[', 1)[1].split(']')[0]
+            if (reg+'+') in content:
+                offset_string = content.split('+')[1]
+                retval = int(offset_string, 16) 
     return retval
         
 def isLDRB(cpu, instruct):
