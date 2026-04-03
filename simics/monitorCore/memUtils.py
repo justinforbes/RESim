@@ -957,12 +957,13 @@ class MemUtils():
                     reg = 'x'+reg[1:]
                     mask = 0xffffffff
                
-                cpl = getCPL(cpu)
+                #cpl = getCPL(cpu)
                 if reg == 'sp':
-                    if cpl == 0 | arm64_app:
-                        reg = 'sp_el0'
-                    else:
-                        reg = 'sp'
+                    reg = 'sp_el0'
+                    #if cpl == 0 | arm64_app:
+                    #    reg = 'sp_el0'
+                    #else:
+                    #    reg = 'sp'
                 #self.lgr.debug('memUtils getRegVal arm64_app %s reg now %s' % (arm64_app, reg))
                 if reg == 'far_el1':
                     reg_num = cpu.iface.int_register.get_number(reg)
