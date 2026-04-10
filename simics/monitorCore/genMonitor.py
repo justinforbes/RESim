@@ -555,13 +555,12 @@ class GenMonitor():
                     if cell_name == 'driver':
                         print('Driver missing RESIM_UNISTD, will not be analyzed')
                         continue
-                    print('Target is missing RESIM_UNISTD path')
-                    self.lgr.error('Target is missing RESIM_UNISTD path')
+                    print('Target is missing RESIM_UNISTD  or RESIM_UNISTD_32 path')
+                    self.lgr.error('Target is missing RESIM_UNISTD  or RESIM_UNISTD_32 path')
                     self.quit()
                     return
                 if 'RESIM_UNISTD' in comp_dict[cell_name]:
                     self.unistd[cell_name] = comp_dict[cell_name]['RESIM_UNISTD']
-                self.lgr.debug('RESIM_UNISTD for cell %s' % cell_name)
                 if 'RESIM_UNISTD_32' in comp_dict[cell_name]:
                     self.unistd32[cell_name] = comp_dict[cell_name]['RESIM_UNISTD_32']
                 if 'RESIM_ROOT_PREFIX' not in comp_dict[cell_name]:
@@ -986,6 +985,9 @@ class GenMonitor():
                     unistd32 = None
                     if cell_name in self.unistd32:
                         unistd32 = self.unistd32[cell_name]
+                    unistd = None
+                    if cell_name in self.unistd:
+                        unistd = self.unistd[cell_name]
                     root_prefix = self.comp_dict[cell_name]['RESIM_ROOT_PREFIX']
                     task_utils = taskUtils.TaskUtils(cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], 
                         unistd, unistd32, self.run_from_snap, self.lgr, root_prefix=root_prefix)
@@ -1106,6 +1108,9 @@ class GenMonitor():
                             unistd32 = None
                             if cell_name in self.unistd32:
                                 unistd32 = self.unistd32[cell_name]
+                            unistd = None
+                            if cell_name in self.unistd:
+                                unistd = self.unistd[cell_name]
                             task_utils = taskUtils.TaskUtils(cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], 
                                 unistd, unistd32, self.run_from_snap, self.lgr)
                             swapper = task_utils.findSwapper()

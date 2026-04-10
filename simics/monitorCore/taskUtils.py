@@ -184,6 +184,8 @@ class TaskUtils():
         #self.lgr.debug('TaskUtils init cell %s with current_task of 0x%x, phys: 0x%x' % (cell_name, param.current_task, self.phys_current_task))
         if unistd is not None:
             self.syscall_numbers = syscallNumbers.SyscallNumbers(unistd, self.lgr)
+        else:
+            self.syscall_numbers = None
         if unistd32 is not None:
             self.syscall_numbers32 = syscallNumbers.SyscallNumbers(unistd32, self.lgr)
         else:
@@ -1343,13 +1345,13 @@ class TaskUtils():
                if callname in self.syscall_numbers.callnums:
                    return self.syscall_numbers.callnums[callname]
                else:
-                   self.lgr.debug('taskUtils syscallNumber %s not in callnums' % callname)
+                   self.lgr.debug('taskUtils arm64_app syscallNumber %s not in callnums' % callname)
                    return -1
             else:
                 if callname in self.syscall_numbers32.callnums:
                     return self.syscall_numbers32.callnums[callname]
                 else:
-                    self.lgr.debug('taskUtils syscallNumber %s not in callnums32' % callname)
+                    self.lgr.debug('taskUtils not arm64 app syscallNumber %s not in callnums32' % callname)
                     return -1
         elif not compat32:
             if callname in self.syscall_numbers.callnums:
