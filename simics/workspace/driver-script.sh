@@ -14,6 +14,15 @@ chown -R mike:mike /home/mike/.ssh
 # warning: the authoritative driver-server.py is at $RESIM_DIR/simics/bin/driver-server.py
 # However this script grabs the copy from the workspace, which should be a sym link to the repo.
 /usr/bin/simics-agent  --overwrite --download driver-server.py --to /tmp/
+#
+# Uncomment the following to provide a DHCP server on the driver and a DNS server.
+#/usr/bin/simics-agent  --overwrite --download driver_services/dhcpserver.py --to /tmp/
+#/usr/bin/simics-agent  --overwrite --download driver_services/start_dhcp.service --to /etc/systemd/system/
+#/usr/bin/simics-agent  --overwrite --download ./dhcp.conf --to /etc/
+#/usr/bin/simics-agent  --overwrite --download driver_services/dnsserver.py --to /tmp/
+#/usr/bin/simics-agent  --overwrite --download driver_services/start_dns.service --to /etc/systemd/system/
+#/usr/bin/simics-agent  --overwrite --download ./dns_records.json --to /etc/
+
 
 # Define the IP addresses we will use
 ip addr add 10.0.0.140/24 dev ens25
@@ -24,6 +33,10 @@ ip link set ens11 up
 
 # Start the driver server that receives commands from the host via drive-driver directives
 systemctl start start_driver_server
+#
+# Uncomment the following to start the DHCP server and DNS server on the driver.
+#systemctl start start_dhcp.service
+#systemctl start start_dns.service
 
 ln -s /var/log/syslog /var/log/messages
 chmod a+r /var/log/syslog
