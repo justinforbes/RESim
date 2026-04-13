@@ -1839,7 +1839,7 @@ class Syscall():
 
         elif callname == 'close':        
             fd = frame['param1']
-            ida_msg = '%s tid:%s (%s) fid:%d' % (callname, tid, comm, frame['param1'])
+            ida_msg = '%s tid:%s (%s) FD:%d' % (callname, tid, comm, frame['param1'])
             if self.traceProcs is not None:
                 #self.lgr.debug('syscallparse for close tid:%s' % tid)
                 self.traceProcs.close(tid, fd)
@@ -2921,6 +2921,7 @@ class Syscall():
                return
            #syscall_info.compat32 = False
         ''' call 0 is read in 64-bit '''
+        word_size = self.mem_utils.wordSize(self.cpu, cpl=3)
         if callnum == 0 and word_size==4:
             self.lgr.debug('syscallHap callnum is zero')
             return
