@@ -3830,7 +3830,7 @@ The driver platform defined by the {\tt RESim/simics/workspace/ubuntu\_driver.in
 it when booting.  Your target will not boot until that script finishes (and creates the driver-ready.flag file).
 Note the simulation will hang while processing that script, so launch any long running programs in the background.
 The sample driver script loads an authorized\_keys file from that directory.  This allows ssh into the driver without passwords and uses
-rsa key files also found in that directory.
+rsa key files also found in that directory.  The sample also includes commands for creating a DHCP server and a DNS server, which are commented out by default.
 
 The username and password for the driver is mike. No password is required if ssh keys are used.  Use {\tt enable-real-time-mode} to avoid login timeouts and network timeouts when
 interacting directly with the driver.  
