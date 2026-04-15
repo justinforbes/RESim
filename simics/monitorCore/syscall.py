@@ -1046,7 +1046,7 @@ class Syscall():
                 break
         ida_msg = 'execve prog: %s %s  tid:%s (%s)  breakonexecve: %r' % (prog_string, arg_string, call_info.tid, comm, self.breakOnExecve())
         if self.traceMgr is not None:
-            self.traceMgr.write(ida_msg+'\n')
+            self.doTrace(ida_msg, tid)
         if self.traceProcs is not None:
             self.traceProcs.setName(call_info.tid, prog_string, arg_string)
 
@@ -1213,7 +1213,7 @@ class Syscall():
         self.context_manager.newProg(prog_string, tid)
         self.lgr.debug(ida_msg)
         if self.traceMgr is not None:
-            self.traceMgr.write(ida_msg+'\n')
+            self.doTrace(ida_msg, tid)
         if self.traceProcs is not None:
             self.traceProcs.setName(tid, prog_string, arg_string)
 
@@ -1269,7 +1269,7 @@ class Syscall():
         if tid in self.comm_cache:
             comm = self.comm_cache[tid]
         ida_msg = None
-        self.lgr.debug('socketParse callname %s' % callname)
+        self.lgr.debug('socketParse callname %s exit_info.retval_addr %s' % (callname, exit_info.retval_addr))
         if callname == 'socketcall':        
             ''' must be 32-bit get params from struct '''
             socket_callnum = frame['param1']
@@ -1555,7 +1555,10 @@ class Syscall():
             self.lgr.debug('recvmsg frame %s' % frame_string)
             exit_info.old_fd = frame['param1']
             msg_hdr_ptr = frame['param2']
-            exit_info.retval_addr = frame['param2']
+            # DO NOT set exit_info.retval_addr, needs to be None for proper sharedSyscall handling
+            # Unset from common socket fu
+            #exit_info.retval_addr = frame['param2']
+            exit_info.retval_addr = None
             exit_info.flags = frame['param3']
             msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr, self.lgr)
             ida_msg = '%s - %s tid:%s (%s) FD: %d flags: 0x%x msghdr: 0x%x %s' % (callname, socket_callname, tid, comm, exit_info.old_fd, msg_hdr_ptr, exit_info.flags, msghdr.getString())
@@ -1686,6 +1689,7 @@ class Syscall():
         word_size = self.mem_utils.wordSize(self.cpu, cpl=3)
         exit_info = ExitInfo(self, cpu, tid, comm, callnum, callname, syscall_info.compat32, frame)
         exit_info.syscall_entry = self.mem_utils.getRegValue(self.cpu, 'pc')
+        self.lgr.debug('syscallparse, exit_info.retval_addr is %s' % exit_info.retval_addr)
         ida_msg = None
         #self.lgr.debug('syscallParse syscall name: %s tid:%s (%s) callname <%s> (%d) params: %s context: %s cycle: 0x%x' % (self.name, tid, comm, callname, callnum, str(self.call_params), 
         #     str(self.cpu.current_context), self.cpu.cycles))
@@ -2573,7 +2577,7 @@ class Syscall():
             if ida_msg is not None and self.traceMgr is not None:
                 if len(ida_msg.strip()) > 0:
                     #self.lgr.debug('syscall call traceMgr with %s' % (ida_msg))
-                    self.traceMgr.write(ida_msg+'\n')
+                    self.doTrace(ida_msg, tid)
 
         if do_stop_from_call:
             self.lgr.debug('syscall syscallParse do_stop_from_call')
@@ -3127,7 +3131,7 @@ class Syscall():
                 self.stop_action.rmFun(self.top.skipAndMail)
         
             if self.traceMgr is not None:
-                self.traceMgr.write(ida_msg+'\n')
+                self.doTrace(ida_msg, tid)
             self.context_manager.setIdaMessage(ida_msg)
             am_watching = self.context_manager.amWatching(tid)
             self.lgr.debug('syscall handleExit retain_so %r am_watching %r ida_msg is %s' % (retain_so, am_watching, ida_msg))
@@ -3636,3 +3640,10 @@ class Syscall():
                 exit_info.call_params.append(call_param)
             if callname.startswith('read') and type(call_param.match_param) is str:
                 exit_info.call_params.append(call_param)
+
+    def doTrace(self, msg, tid):
+        if self.top.debugging():
+            if self.top.amWatching(tid):
+                self.traceMgr.write(msg+'\n')
+        else:
+            self.traceMgr.write(msg+'\n')

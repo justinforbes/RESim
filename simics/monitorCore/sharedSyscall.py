@@ -620,6 +620,11 @@ class SharedSyscall():
                 if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or my_syscall.linger or self.top.tracking()) and self.dataWatch is not None:
                     ''' in case we want to break on a read of this data. ''' 
                     self.lgr.debug('sharedSyscall recvmsg call checkCount')
+                    exit_info.count = eax
+                    if exit_info.retval_addr is None:
+                        self.lgr.debug('sharedSyscall recvmsg retval_addr None as expected')
+                    else:
+                        self.lgr.error('sharedSyscall recvmsg retval_addr not none, is 0x%x' % exit_info.retval_addr)
                     if not self.checkCount(eax, exit_info, trace_msg, s):
                         iov_size = 2*word_size
                         iov_addr = msghdr.msg_iov
@@ -641,7 +646,6 @@ class SharedSyscall():
                                 if exit_info.retval_addr is None:
                                     ''' TBD generalize this for use by prepInject'''
                                     exit_info.retval_addr = base
-                                    exit_info.count = data_len
                                 self.lgr.debug('dataWatch recvmsg setRange base 0x%x len %d' % (base, data_len))
                                 if data_len > 0:
                                     self.lgr.debug('recvmsg set call dataWatch base 0x%x data_len 0x%x' % (base, data_len))
@@ -1583,33 +1587,34 @@ class SharedSyscall():
         dumb_tid, dumb2 = self.context_manager.getDebugTid() 
         if dumb_tid is not None and callname == 'clone':
             if eax == 0:
-                self.lgr.debug('sharedSyscall clone but eax is zero ??? tid is %s' % tid)
+                self.lgr.debug('sharedSyscall handleExit clone but eax is zero ??? tid is %s' % tid)
                 return True
-            self.lgr.debug('sharedSyscall adding clone %d to watched tids' % eax)
+            self.lgr.debug('sharedSyscall handleExit adding clone %d to watched tids' % eax)
             self.context_manager.addTask(eax)
 
         if exit_info.matched_param is not None and (exit_info.matched_param.match_param is not None or exit_info.matched_param.name == 'runToCall') and exit_info.matched_param.break_simulation:
             '''  Use syscall module that got us here to handle stop actions '''
-            self.lgr.debug('exitHap found matching call parameter name: %s  match_param %s' % (exit_info.matched_param.name, str(exit_info.matched_param.match_param)))
+            self.lgr.debug('sharedSyscall handleExit found matching call parameter name: %s  match_param %s' % (exit_info.matched_param.name, str(exit_info.matched_param.match_param)))
             if exit_info.matched_param.name != 'runToCall' or exit_info.matched_param.subcall == callname:
                 self.matching_exit_info = exit_info
+                self.lgr.debug('sharedSyscall handleExit set matching_exit_info count is %s' % exit_info.count)
                 self.context_manager.setIdaMessage(trace_msg)
                 #self.lgr.debug('exitHap found matching call parameters callnum %d name %s' % (exit_info.callnum, callname))
                 #my_syscall = self.top.getSyscall(self.cell_name, callname)
                 my_syscall = exit_info.syscall_instance
                 if my_syscall is None:
-                    self.lgr.error('sharedSyscall could not get syscall for %s' % callname)
+                    self.lgr.error('sharedSyscall handleExit could not get syscall for %s' % callname)
                 else:
                     if not my_syscall.linger: 
                         self.stopTrace()
-                    self.lgr.debug('sharedSyscall add call param %s to syscall remove list' % exit_info.matched_param.name)
+                    self.lgr.debug('sharedSyscall handleExit add call param %s to syscall remove list' % exit_info.matched_param.name)
                     my_syscall.appendRmParam(exit_info.matched_param.name)
                     SIM_run_alone(my_syscall.stopAlone, callname)
                     print(trace_msg)
     
         if trace_msg is not None and len(trace_msg.strip())>0:
             #self.lgr.debug('sharedSyscall exitHap cell %s %s'  % (self.cell_name, trace_msg.strip()))
-            self.traceMgr.write(trace_msg) 
+            exit_info.syscall_instance.doTrace(trace_msg.strip(), tid)
         return True
 
     def checkCount(self, eax, exit_info, trace_msg, data_string):
@@ -1656,6 +1661,7 @@ class SharedSyscall():
         if self.top.isWindows():
             return self.win_call_exit.getMatchingExitInfo() 
         else:
+            self.lgr.debug('sharedSyscall getMatchingExitInfo is from syscall %s' % (self.matching_exit_info.syscall_instance.name))
             return self.matching_exit_info 
 
     def stopAlone(self, Dumb):
