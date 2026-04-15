@@ -3366,6 +3366,7 @@ class GenMonitor():
     def removeDebugBreaks(self, keep_watching=False, keep_coverage=True, immediate=False):
         ''' return true if breaks were set and we removed them '''
         self.lgr.debug('genMon removeDebugBreaks was set: %r immediate: %r' % (self.debug_breaks_set, immediate))
+        self.flushTrace()
         if not keep_watching:
             if immediate:
                 self.context_manager[self.target].stopWatchTasksAlone(None)
