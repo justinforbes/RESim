@@ -22,6 +22,7 @@ cp $RESIM_DIR/simics/workspace/driver-script.sh .
 cp $RESIM_DIR/simics/workspace/authorized_keys .
 # Use a link because simics agent downloads only from workspace
 ln -s $RESIM_DIR/simics/bin/driver-server.py 
+ln -s $RESIM_DIR/simics/driver_services
 if [ "$1" == "-e" ]; then
 #
 #   Examples
