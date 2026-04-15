@@ -173,7 +173,7 @@ class StackFrameManager():
         eip = self.mem_utils.getRegValue(self.cpu, 'pc')
         cpu, comm, tid  = self.task_utils.curThread()
         self.stack_base[tid] = esp
-        self.lgr.debug('setStackBase tid:%s to 0x%x init eip is 0x%x' % (tid, esp, eip))
+        self.lgr.debug('stackFrameManager setStackBase tid:%s to 0x%x init eip is 0x%x' % (tid, esp, eip))
 
     def modeChangeForStack(self, want_tid, one, old, new):
         if self.mode_hap is None:
