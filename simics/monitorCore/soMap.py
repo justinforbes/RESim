@@ -260,10 +260,13 @@ class SOMap():
 
     def isCode(self, address, tid):
         ''' is the given address within the text segment or those of SO libraries? '''
+        if address is None:
+            cpu, comm, tid = self.task_utils.curThread() 
+            self.lgr.debug('SOMap isCode, address of None given for tid:%s' % tid)
         tid = self.getSOTid(tid)
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
-            self.lgr.debug('SOMap isCode, regot tid after getSOTid failed, tid:%s missing from so_file_map' % tid)
+            self.lgr.debug('SOMap isCode, getSOTid failed for tid %s' % tid)
             return False
         #if tid in self.prog_start and self.prog_start[tid] is not None:
         #    self.lgr.debug('compare 0x%x to 0x%x - 0x%x' % (address, self.prog_start[tid], self.prog_end[tid]))
