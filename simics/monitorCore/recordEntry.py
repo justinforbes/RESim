@@ -133,7 +133,7 @@ class RecordEntry():
                         #SIM_break_simulation('debug me')
                         callname = self.task_utils.syscallName(call_num, self.compat32)
                         if callname is None or callname == 'not_mapped':
-                            self.lgr.debug('recordEntry sysenterHap bad call num %d, assume page fault, ignore' % call_num)
+                            self.lgr.debug('recordEntry sysenterHap bad call num %d, assume page fault, ignore. cycle: 0x%x context: %s' % (call_num, self.cpu.cycles, self.cpu.current_context))
                             return
                         #self.lgr.debug('recordEntry sysenterHap tid:%s frame %s callnum %d callname %s cycles: 0x%x' % (tid, taskUtils.stringFromFrame(frame), call_num, callname, self.cpu.cycles))
                     else:
