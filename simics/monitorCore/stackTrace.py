@@ -1019,8 +1019,12 @@ class StackTrace():
         '''
 
         if self.stack_base is not None:
-            self.lgr.debug('stackTrace doTrace tid:%s esp is 0x%x eip 0x%x  stack_base 0x%x' % (self.tid, esp, eip, self.stack_base))
-            pass
+            if esp > self.stack_base:
+                self.lgr.debug('stackTrace doTrace tid:%s esp is 0x%x eip 0x%x  stack_base 0x%x  WTH?? set base to None' % (self.tid, esp, eip, self.stack_base))
+                self.stack_base = None
+            else:
+                self.lgr.debug('stackTrace doTrace tid:%s esp is 0x%x eip 0x%x  stack_base 0x%x' % (self.tid, esp, eip, self.stack_base))
+                pass
         else:
             self.lgr.debug('stackTrace doTrace NO STACK BASE tid:%s esp is 0x%x eip 0x%x' % (self.tid, esp, eip))
             pass
@@ -1060,6 +1064,9 @@ class StackTrace():
         frame, ptr = self.genFrame(eip, instruct, ptr, None, None, None, None, msg='first frame')
         if self.cpu.architecture.startswith('x86'):
             self.lgr.debug('stackTrace ptr after adjust for first frame 0x%x' % ptr)
+        else:
+            self.lgr.debug('stackTrace not x86, ptr after adjust for first frame 0x%x' % ptr)
+            
         if first_fun_addr is not None:
             #self.lgr.debug('stackTrace doTrace begin tid:%s cur eip 0x%x sp: 0x%x instruct %s  fname %s skip_recurse: %r first_fun_addr 0x%x fun name %s' % (self.tid, eip, esp, instruct, fname, self.skip_recurse, first_fun_addr, first_fun_name))
             pass
@@ -1108,7 +1115,7 @@ class StackTrace():
                 elif cur_fun_name.startswith('_'):
                     cur_fun_name = cur_fun_name[1:]
                 prev_ip = eip
-                self.lgr.debug('doTrace starting eip: 0x%x is in fun %s 0x%x forcing prev_ip to eip' % (eip, cur_fun_name, cur_fun))
+                self.lgr.debug('doTrace starting eip: 0x%x is in fun %s 0x%x forcing prev_ip to eip.  ptr is 0x%x' % (eip, cur_fun_name, cur_fun, ptr))
 
         ''' See if BP register should be used to find frames and/or adjust sp '''
         hacked_bp = False
