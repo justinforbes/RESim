@@ -58,7 +58,8 @@ class RunToReturn():
         if self.cpu.architecture.startswith('arm'):
             ret_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, 0, self.kernel_base, 0, prefix='ret')
             ret_break2 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, 0, self.kernel_base, 0, prefix='bx lr')
-            self.ret_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.retHap, None, ret_break1, ret_break2, 'run_to_return_ret')
+            ret_break3 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, 0, self.kernel_base, 0, prefix='ldmia sp!')
+            self.ret_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.retHap, None, ret_break1, ret_break3, 'run_to_return_ret')
         else:
             if self.cpu.architecture == 'ppc32':
                 prefix = 'blr'
@@ -113,12 +114,19 @@ class RunToReturn():
         sp = self.top.getReg('sp', self.cpu)
         eip = self.top.getEIP()
         instruct = self.top.disassembleAddress(self.cpu, eip)
-        self.ret_count = self.ret_count+1
-        if instruct[1].startswith('blr') or instruct[1] == 'bx lr':
-            lr = self.top.getReg('lr', self.cpu)
-            lr_fun = self.top.getFunName(lr)
-            call_from_fun = self.top.getFunName(eip)
-            self.lgr.debug('RunToReturn retHap calls:%d rets now:%d  sp: 0x%x eip: 0x%x %s lr 0x%x to fun %s from fun %s' % (self.call_count, self.ret_count, sp, eip, instruct[1], lr, lr_fun, call_from_fun))
+        if instruct[1].startswith('ldmia sp!'):
+            if 'pc' not in instruct[1]:
+                self.lgr.debug('RunToReturn retHap is %s, not a return, bail' % instruct[1])
+            else:
+                self.lgr.debug('RunToReturn retHap ret is %s' % instruct[1])
+                self.ret_count = self.ret_count+1
+        else:
+            self.ret_count = self.ret_count+1
+            if instruct[1].startswith('blr') or instruct[1] == 'bx lr':
+                lr = self.top.getReg('lr', self.cpu)
+                lr_fun = self.top.getFunName(lr)
+                call_from_fun = self.top.getFunName(eip)
+                self.lgr.debug('RunToReturn retHap calls:%d rets now:%d  sp: 0x%x eip: 0x%x %s lr 0x%x to fun %s from fun %s' % (self.call_count, self.ret_count, sp, eip, instruct[1], lr, lr_fun, call_from_fun))
              
         if self.call_count == self.ret_count:
             SIM_run_alone(self.rmHaps, None)
