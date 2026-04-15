@@ -21,14 +21,16 @@ class TargetFS():
                 from_dir = os.path.join(self.root_prefix, subdir)
                 retval = self.findFrom(name, from_dir)
                 if retval is not None:
-                    self.lgr.debug('TargetFS find found %s' % retval)
+                    if self.lgr is not None:
+                        self.lgr.debug('TargetFS find found %s' % retval)
                     break
         return retval
 
     def findFrom(self, name, from_dir):
         # use file searching via os.walk to find an executable with the given name.
         # avoid files in etc.  TBD warn if multiple finds?
-        self.lgr.debug('TargetFS find from %s look for [%s]' % (from_dir, name))
+        if self.lgr is not None:
+            self.lgr.debug('TargetFS find from %s look for [%s]' % (from_dir, name))
         for root, dirs, files in os.walk(from_dir):
    
             #self.lgr.debug('TargetFS find files is %s' % str(files))
@@ -36,7 +38,8 @@ class TargetFS():
             if '/etc/' in root or '/lib/' in root or '/sh/' in root or root.endswith('/sh'):
                 continue 
             if name in files:
-                self.lgr.debug('TargetFS findFrom found %s root %s name %s' % (name, root, name))
+                if self.lgr is not None:
+                    self.lgr.debug('TargetFS findFrom found %s root %s name %s' % (name, root, name))
                 retval = os.path.join(from_dir, root, name)
                 abspath = os.path.abspath(retval)
                 return abspath
