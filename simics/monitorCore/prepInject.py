@@ -163,12 +163,12 @@ class PrepInject():
                   current_ip, tid, self.cpu.cycles))
         self.ret_cycle = self.cpu.cycles
 
-        ''' Find the exit info from the system call that did the read.'''
+        # Find the exit info from the system call that did the read.
         self.exit_info = self.top.getMatchingExitInfo()
 
         tid = self.top.getTID()
         length = self.getLength()
-        ''' Save the buffer read at point of prep inject, e.g., for use as a seed'''
+        # Save the buffer read at point of prep inject, e.g., for use as a seed
 
         if self.top.isWindows():
             ret_count = self.mem_utils.readWord(self.cpu, self.addr_of_count)
