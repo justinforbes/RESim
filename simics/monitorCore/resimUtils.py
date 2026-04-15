@@ -381,11 +381,13 @@ def getfileInsensitive(path, root_prefix, root_subdirs, lgr, force_look=False):
     if '/' in path:
         parts = path.split('/')
         for p in parts[:-1]:
-            lgr.debug('getfileInsensitve part %s cur_dir %s' % (p, cur_dir))
+            if lgr is not None:
+                lgr.debug('getfileInsensitve part %s cur_dir %s' % (p, cur_dir))
             dlist = [ name for name in os.listdir(cur_dir) if os.path.isdir(os.path.join(cur_dir, name)) ]
 
             for d in dlist:
-                lgr.debug('getfileInsensitive does %s match %s' % (d.upper(), p.upper()))
+                if lgr is not None:
+                    lgr.debug('getfileInsensitive does %s match %s' % (d.upper(), p.upper()))
                 if '~' in p:
                     tilda_parts = p.split('~')
                     if d.lower().startswith(tilda_parts[0].lower()): 
@@ -397,7 +399,8 @@ def getfileInsensitive(path, root_prefix, root_subdirs, lgr, force_look=False):
                     cur_dir = os.path.join(cur_dir, d)
                     break
         p = parts[-1]
-        lgr.debug('getfileInsensitve cur_dir %s last part %s' % (cur_dir, p))
+        if lgr is not None:
+            lgr.debug('getfileInsensitve cur_dir %s last part %s' % (cur_dir, p))
         flist = os.listdir(cur_dir)
         for f in flist:
             if f.upper() == p.upper():
@@ -409,11 +412,13 @@ def getfileInsensitive(path, root_prefix, root_subdirs, lgr, force_look=False):
             if lgr is not None:
                  lgr.warning('getfileInsensitive RELATIVE %s root: %s   NOT LOOKING, return none' % (path, root_prefix))
         else:
-            lgr.debug('getfileInsensitive')
+            if lgr is not None:
+                lgr.debug('getfileInsensitive')
             if len(root_subdirs) > 0:
                 for subpath in root_subdirs:
                     top_path = os.path.join(root_prefix, subpath)
-                    lgr.debug('getfileInsensitive using subdir %s walk from %s' % (subpath, top_path))
+                    if lgr is not None:
+                        lgr.debug('getfileInsensitive using subdir %s walk from %s' % (subpath, top_path))
                     for root, dirs, files in os.walk(top_path):
                         for f in files:
                             if f.upper() == path.upper():
@@ -422,7 +427,8 @@ def getfileInsensitive(path, root_prefix, root_subdirs, lgr, force_look=False):
                                 return abspath
             else:
                 top_path = os.path.join(root_prefix)
-                lgr.debug('getfileInsensitive no subdirs walk from %s' % top_path)
+                if lgr is not None:
+                    lgr.debug('getfileInsensitive no subdirs walk from %s' % top_path)
                 for root, dirs, files in os.walk(top_path):
                     for f in files:
                         if f.upper() == path.upper():
