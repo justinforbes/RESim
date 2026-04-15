@@ -238,19 +238,23 @@ class StackFrameManager():
                 value = self.mem_utils.readWord32(self.cpu, ptr) 
             else:
                 value = self.mem_utils.readWord(self.cpu, ptr) 
-            name = ''
-            if self.soMap.isCode(value, tid):
-                self.lgr.debug('stackFrameManager dumpStack 0x%x is code' % value)
-                fun_addr = fun_mgr.getFun(value)
-                if fun_addr is not None:
-                    name = fun_mgr.getName(fun_addr)
-                    self.lgr.debug('stackFrameManager fun_addr 0x%x %s' % (fun_addr, name))
-                else:
-                    name = 'unknown'
-            so = self.top.getSO(value, just_name=True)
-            print('%16x   %16x %s %s' % (ptr, value, name, so))
-            if fh is not None:
-                fh.write('%16x   %16x %s %s\n' % (ptr, value, name, so))
+            if value is not None:
+                name = ''
+                if self.soMap.isCode(value, tid):
+                    self.lgr.debug('stackFrameManager dumpStack 0x%x is code' % value)
+                    fun_addr = fun_mgr.getFun(value)
+                    if fun_addr is not None:
+                        name = fun_mgr.getName(fun_addr)
+                        self.lgr.debug('stackFrameManager fun_addr 0x%x %s' % (fun_addr, name))
+                    else:
+                        name = 'unknown'
+                so = self.top.getSO(value, just_name=True)
+                print('%16x   %16x %s %s' % (ptr, value, name, so))
+                if fh is not None:
+                    fh.write('%16x   %16x %s %s\n' % (ptr, value, name, so))
+            else:
+                self.lgr.error('stackFrameManager got None for ptr 0x%x' % ptr)
+                break
             ptr = ptr + offset
         if fh is not None:
             fh.close()
