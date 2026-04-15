@@ -510,7 +510,7 @@ skip_proc_list = ['udevd', 'udevadm', 'modprobe', 'path_id']
 class Syscall():
 
     def __init__(self, top, cell_name, cell, param, mem_utils, task_utils, context_manager, traceProcs, sharedSyscall, lgr, 
-                   traceMgr, myIPC, call_list=None, trace = False, flist_in=None, soMap = None, 
+                   traceMgr, myIPC, dataWatch, call_list=None, trace = False, flist_in=None, soMap = None, 
                    call_params=[], netInfo=None, binders=None, connectors=None, stop_on_call=False, targetFS=None, skip_and_mail=True, linger=False,
                    compat32=False, background=False, name=None, record_fd=False, callback=None, swapper_ok=False, kbuffer=None): 
         self.lgr = lgr
@@ -555,6 +555,7 @@ class Syscall():
         self.timeofday_start_cycle = {}
         self.call_list = call_list
         self.trace = trace
+        self.dataWatch = dataWatch
         if call_params is None:
             self.call_params = []
         else:
@@ -1867,6 +1868,7 @@ class Syscall():
                             if self.fd_tid is None or tid == self.fd_tid:
                                 self.lgr.debug('syscall closed fd %d, stop trace' % fd)
                                 self.stopTrace()
+                                self.dataWatch.stoppingTrace(fd)
                         else:
                             self.lgr.debug('syscall closed fd %d, but clone_fd_count not yet 1 %d' % (fd, self.clone_fd_count))
                             self.clone_fd_count -= 1
@@ -2831,7 +2833,7 @@ class Syscall():
         if self.context_manager.isIgnoreContext():
             return
         cpu, comm, tid = self.task_utils.curThread() 
-        #self.lgr.debug('syscallHap for %s' % (tid))
+        #self.lgr.debug('syscallHap for %s cycle: 0x%x' % (tid, self.cpu.cycles))
         if self.cpu.architecture == 'arm64' and self.arm64BailCheck(break_num):
             return
  
@@ -2916,7 +2918,7 @@ class Syscall():
                self.lgr.debug('syscallHap name: %s break eip 0x%x not in syscall_info arm64_app %r break_num 0x%x handle: 0x%x  Assume computed break set is not applicable to this process' % (self.name, break_eip, arm64_app, break_num, break_handle))
                return
            callname = self.task_utils.syscallName(callnum, self.syscall_info.compat32) 
-           #self.lgr.debug('syscallHap computed, callnum is %s name %s cycle: 0x%x' % (callnum, callname, self.cpu.cycles))
+           self.lgr.debug('syscallHap computed, callnum is %s name %s cycle: 0x%x' % (callnum, callname, self.cpu.cycles))
 
            if self.record_fd and (callname not in record_fd_list or comm in skip_proc_list):
                return

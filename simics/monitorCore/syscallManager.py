@@ -207,7 +207,7 @@ class SyscallManager():
         else:
             retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, 
-                               self.lgr, self.traceMgr, self.myIPC, call_list=None, call_params=call_params_list, targetFS=self.targetFS, linger=linger, 
+                               self.lgr, self.traceMgr, self.myIPC, self.dataWatch, call_list=None, call_params=call_params_list, targetFS=self.targetFS, linger=linger, 
                                background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, 
                                stop_on_call=stop_on_call, trace=trace, binders=binders, connectors=connectors, soMap=self.soMap,
                                netInfo=netInfo, record_fd=record_fd, swapper_ok=swapper_ok)
@@ -278,7 +278,7 @@ class SyscallManager():
                 else:
                     retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                    self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr, self.myIPC,
-                                   call_list=call_list, call_params=call_params_list, targetFS=self.targetFS, linger=linger, 
+                                   self.dataWatch, call_list=call_list, call_params=call_params_list, targetFS=self.targetFS, linger=linger, 
                                    background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, soMap=self.soMap, 
                                    stop_on_call=stop_on_call, skip_and_mail=skip_and_mail, kbuffer=kbuffer, trace=trace)
                 ''' will have at least one call parameter, perhaps the dummy. '''
@@ -360,7 +360,7 @@ class SyscallManager():
                 else:
                     retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,self.myIPC,
-                               call_list=new_call_list, call_params=call_params_list, targetFS=self.targetFS, linger=linger, soMap=self.soMap,
+                               self.dataWatch, call_list=new_call_list, call_params=call_params_list, targetFS=self.targetFS, linger=linger, soMap=self.soMap,
                                background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, stop_on_call=stop_on_call, kbuffer=kbuffer)
 
                 new_call_instance = SyscallInstance(name, new_call_list, retval, call_params_list, self.lgr)
@@ -459,7 +459,7 @@ class SyscallManager():
                 else:
                     retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,self.myIPC,
-                               call_list=new_call_list, call_params=[], targetFS=self.targetFS, linger=linger, soMap=self.soMap,
+                               self.dataWatch, call_list=new_call_list, call_params=[], targetFS=self.targetFS, linger=linger, soMap=self.soMap,
                                background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, stop_on_call=stop_on_call, kbuffer=kbuffer)
                 self.lgr.debug('syscallManager rmSyscall created syscall with call list %s' % str(new_call_list))
 
