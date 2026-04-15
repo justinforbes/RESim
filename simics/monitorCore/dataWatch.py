@@ -6672,3 +6672,8 @@ class DataWatch():
 
     def setHangCallback(self, hang_callback, hang_cycles, now=True):
         self.backstop.setHangCallback(hang_callback, hang_cycles, now=now)
+
+    def stoppingTrace(self, fd):
+        if not self.disabled and len(self.start) == 0:
+            self.lgr.debug('dataWatch stoppingTrace before any ranges set???')
+            print('\n**** Stopping trace due to FD %d close before any data found\n' % fd)
