@@ -39,6 +39,7 @@ SOCK_TYPE_MASK = 0xf
 AF_LOCAL = 1
 AF_INET = 2
 AF_NETLINK = 16
+AF_PACKET = 17
 domaintype = [ 'AF_UNSPEC', 'AF_LOCAL', 'AF_INET', 'AF_AX25', 'AF_IPX', 'AF_APPLETALK', 'AF_NETROM', 'AF_BRIDGE',
 'AF_ATMPVC', 'AF_X25', 'AF_INET6', 'AF_ROSE', 'AF_DECnet', 'AF_NETBEUI', 'AF_SECURITY', 'AF_KEY', 'AF_NETLINK',
 'AF_PACKET', 'AF_ASH', 'AF_ECONET', 'AF_ATMSVC', 'AF_RDS', 'AF_SNA', 'AF_IRDA', 'AF_PPPOX', 'AF_WANPIPE', 'AF_LLC',	
@@ -165,6 +166,7 @@ class SockStruct():
         self.protocol = None
         self.lgr = lgr
         self.sock_addr_nl = None
+        self.if_index = None
         try:
             self.sa_family = mem_utils.readWord16(cpu, self.addr) 
         except:
@@ -183,6 +185,9 @@ class SockStruct():
             pid = mem_utils.readWord32(cpu, self.addr+4)
             groups = mem_utils.readWord32(cpu, self.addr+8)
             self.sock_addr_nl = SockAddrNL(pid, groups)
+        elif self.sa_family == AF_PACKET:
+            self.protocol = mem_utils.readWord16le(cpu, self.addr+2)
+            self.if_index = mem_utils.readWord32(cpu, self.addr+4)
 
     def famName(self):
         if self.sa_family is not None and self.sa_family < len(domaintype):
@@ -251,6 +256,13 @@ class SockStruct():
                 retval = ('%s sa_family%d: %s %s %s sock_addr_nl.pid %d (0x%x) sock_addr_nl.groups: 0x%x ' % (fd, self.sa_family, self.famName(), sock_type, addr, self.sock_addr_nl.nl_pid, self.sock_addr_nl.nl_pid, self.sock_addr_nl.nl_groups))
             else:
                 retval = ('%s sa_family%d: %s %s %s sock_addr_nl IS NONE ' % (fd, self.sa_family, self.famName(), sock_type, addr))
+        elif self.sa_family == AF_PACKET:
+            if self.protocol == 8:
+                protocol = 'ETH_P_IP'
+            else:
+                protocol = 'FIX_THIS'
+            retval = ('%s sa_family%d: %s protocol: %s if_index: 0x%x' % (fd, self.sa_family, self.famName(), protocol, self.if_index))
+
         else:
             retval = ('%s sa_family%d: %s %s TBD' % (fd, self.sa_family, self.famName(), addr))
         return retval
