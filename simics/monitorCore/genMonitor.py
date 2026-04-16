@@ -5381,14 +5381,14 @@ class GenMonitor():
         if self.target in self.ropCop:
             self.ropCop[self.target].watchROP(watching=watching, callback=callback, addr=addr, size=size)
 
-    def enableCoverage(self, fname=None, backstop_cycles=None, report_coverage=False, dead_zone=False):
+    def enableCoverage(self, fname=None, backstop_cycles=None, report_coverage=False, dead_zone=False, manual_dead_zone=False):
         ''' Enable code coverage '''
         ''' Intended for use with trackIO, playAFL, etc '''
         if self.coverage is not None:
             analysis_path = self.getAnalysisPath(fname)
             tid, cpu = self.context_manager[self.target].getDebugTid() 
             self.coverage.enableCoverage(tid, fname=analysis_path, backstop = self.back_stop[self.target], backstop_cycles=backstop_cycles, 
-              report_coverage=report_coverage, create_dead_zone=dead_zone)
+              report_coverage=report_coverage, create_dead_zone=dead_zone, manual_dead_zone=manual_dead_zone)
             self.coverage.doCoverage()
         else:
             self.lgr.error('enableCoverage, no coverage defined')
@@ -5732,7 +5732,7 @@ class GenMonitor():
 
     def playAFL(self, dfile, n=1, sor=False, linear=False, dead=False, afl_mode=False, no_cover=False, crashes=False, 
             parallel=False, only_thread=False, target=None, trace_all=False, repeat=False, fname=None, targetFD=None, count=1, 
-            no_page_faults=False, show_new_hits=False, diag_hits=False, search_list=None, commence_params=None, watch_rop=False, primer=None):
+            no_page_faults=False, show_new_hits=False, diag_hits=False, search_list=None, commence_params=None, watch_rop=False, primer=None, run=True):
         ''' replay one or more input files, e.g., all AFL discovered paths for purposes of updating BNT in code coverage 
             Use fname to name a binary such as a library.
         '''
@@ -5752,7 +5752,8 @@ class GenMonitor():
               self.cfg_file, self.lgr, packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, 
               crashes=crashes, parallel=parallel, only_thread=only_thread, target_cell=target_cell, target_proc=target_proc, 
               repeat=repeat, fname=fname, targetFD=targetFD, count=count, trace_all=trace_all, no_page_faults=no_page_faults,
-              show_new_hits=show_new_hits, diag_hits=diag_hits, search_list=search_list, commence_params=commence_params, watch_rop=watch_rop, primer=primer)
+              show_new_hits=show_new_hits, diag_hits=diag_hits, search_list=search_list, commence_params=commence_params, watch_rop=watch_rop, 
+              primer=primer, run=run)
         if play is not None and target_proc is None:
             self.lgr.debug('playAFL now go')
             #if trace_all: 
