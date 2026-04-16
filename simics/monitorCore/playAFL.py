@@ -32,6 +32,7 @@ import writeData
 import aflPath
 import resimUtils
 import memUtils
+import defaultConfig
 import cli
 import sys
 import os
@@ -44,7 +45,7 @@ class PlayAFL():
              snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False,
              create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, target_cell=None, target_proc=None,
              fname=None, repeat=False, targetFD=None, count=1, trace_all=False, no_page_faults=False, show_new_hits=False, diag_hits=False,
-             search_list=None, commence_params=None, watch_rop=False, primer=None):
+             search_list=None, commence_params=None, watch_rop=False, primer=None, run=True):
         if fname is not None and '/' in fname and fname[0] != '/':
             # needed for soMap lookups
             fname = '/'+fname
@@ -97,11 +98,13 @@ class PlayAFL():
         self.commence_params = commence_params
         self.stop_hap_cycle = None
         self.back_stop_cycle = None
-        self.hang_cycles = 90000000
+        self.run = run
+        self.hang_cycles = defaultConfig.hangCycles()
+        #self.hang_cycles = 90000000
+        #hang = os.getenv('HANG_CYCLES')
+        #if hang is not None:
+        #    self.hang_cycles = int(hang)
         self.addr_of_count = None
-        hang = os.getenv('HANG_CYCLES')
-        if hang is not None:
-            self.hang_cycles = int(hang)
         self.cycle_event = None
         self.initial_cycle = self.target_cpu.cycles
         ''' for testing, replay same data file over and over. only works with single file '''
@@ -194,17 +197,19 @@ class PlayAFL():
         self.in_data = None
         #self.backstop_cycles =   100000
         if self.afl_mode:
-            if os.getenv('AFL_BACK_STOP_CYCLES') is not None:
-                self.backstop_cycles =   int(os.getenv('AFL_BACK_STOP_CYCLES'))
-                self.lgr.debug('afl AFL_BACK_STOP_CYCLES is %d' % self.backstop_cycles)
-            else:
-                self.lgr.warning('no AFL_BACK_STOP_CYCLES defined, using default of 100000')
-                self.backstop_cycles =   1000000
+            #if os.getenv('AFL_BACK_STOP_CYCLES') is not None:
+            #    self.backstop_cycles =   int(os.getenv('AFL_BACK_STOP_CYCLES'))
+            #    self.lgr.debug('afl AFL_BACK_STOP_CYCLES is %d' % self.backstop_cycles)
+            #else:
+            #    self.lgr.warning('no AFL_BACK_STOP_CYCLES defined, using default of 100000')
+            #    self.backstop_cycles =   1000000
+            self.backstop_cycles = defaultConfig.aflBackstopCycles('AFL_BACK_STOP_CYCLES')
         else:
-            self.backstop_cycles =   900000
-            bsc = os.getenv('BACK_STOP_CYCLES')
-            if bsc is not None:
-                self.backstop_cycles = int(bsc)
+            #self.backstop_cycles =   900000
+            #bsc = os.getenv('BACK_STOP_CYCLES')
+            #if bsc is not None:
+            #    self.backstop_cycles = int(bsc)
+            self.backstop_cycles = defaultConfig.backstopCycles()
         
         if os.getenv('BACK_STOP_DELAY') is not None:
             self.backstop_delay =   int(os.getenv('BACK_STOP_DELAY'))
@@ -655,15 +660,21 @@ class PlayAFL():
             if self.repeat:
                 #if self.repeat_counter > 20:
                 #    return
-                self.lgr.debug('playAFL goAlone repeat set, do continue')
-                SIM_continue(0)
-                self.lgr.debug('playAFL goAlone repeat set, did continue')
-                pass
+                if self.run:
+                    self.lgr.debug('playAFL goAlone repeat set, do continue')
+                    SIM_continue(0)
+                    self.lgr.debug('playAFL goAlone repeat set, did continue')
+                    pass
+                else:
+                    print('Told not to run yet.')
             else:
-                self.lgr.debug('playAFL goAlone repeat not set, do continue from cycle: 0x%x' % self.cpu.cycles)
-                SIM_continue(0)
-                self.lgr.debug('playAFL goAlone repeat not set, back from did continue cycle: 0x%x' % self.cpu.cycles)
-                pass
+                if self.run:
+                    self.lgr.debug('playAFL goAlone repeat not set, do continue from cycle: 0x%x' % self.cpu.cycles)
+                    SIM_continue(0)
+                    self.lgr.debug('playAFL goAlone repeat not set, back from did continue cycle: 0x%x' % self.cpu.cycles)
+                    pass
+                else:
+                    print('Told not to run yet.')
         else:
             self.lgr.info('playAFL did all sessions.')
             ''' did all sessions '''

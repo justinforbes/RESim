@@ -164,10 +164,11 @@ class AFL():
         self.pc_reg = self.cpu.iface.int_register.get_number('pc')
         self.addr = None
         self.orig_buffer = None
-        self.hang_cycles = 90000000
-        hang = os.getenv('HANG_CYCLES')
-        if hang is not None:
-            self.hang_cycles = int(hang)
+        self.hang_cycles = defaultConfig.hangCycles()
+        #self.hang_cycles = 90000000
+        #hang = os.getenv('HANG_CYCLES')
+        #if hang is not None:
+        #    self.hang_cycles = int(hang)
         self.lgr.debug('AFL init from snap %s' % snap_name)
         self.addr_of_count = None
 

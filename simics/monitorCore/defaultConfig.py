@@ -5,12 +5,6 @@ def backstopCycles():
     if backstop is not None:
         backstop_cycles = int(backstop)
     return backstop_cycles
-def hangCycles():
-    hang_cycles = 90000000
-    hang = os.getenv('HANG_CYCLES')
-    if hang is not None:
-        hang_cycles = int(hang)
-    return hang_cycles
 
 def aflBackstopCycles():
     backstop_cycles =   1000000
@@ -18,3 +12,19 @@ def aflBackstopCycles():
     if backstop is not None:
         backstop_cycles = int(backstop)
     return backstop_cycles
+
+def hangCycles(afl=False):
+    hang_cycles = 90000000
+    hang = os.getenv('HANG_CYCLES')
+    if hang is not None:
+        hang_cycles = int(hang)
+    else:
+        # sane defaults
+        if afl:
+           bsc = aflBackstopCycles()
+        else:
+           bsc = backstopCycles()
+        hang2 = int(bsc * 2)
+        hang_cycles = max(hang_cycles, hang2)
+    return hang_cycles
+
