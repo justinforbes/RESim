@@ -95,6 +95,13 @@ class BackStop():
             SIM_event_cancel_time(self.cpu, self.cycle_event, self.cpu, None, None)
         self.back_stop_cycle = None
 
+    def clearHang(self):
+        if self.hang_event is not None:
+            #self.lgr.debug('backStop clearCycle')
+            #SIM_event_cancel_time(cpu, self.cycle_event, self.cpu, 0, None)
+            SIM_event_cancel_time(self.cpu, self.hang_event, self.cpu, None, None)
+        self.hang_cycles = None
+ 
     def checkEvent(self):
         if self.cycle_event is None:
             print('backStop NO event') 
