@@ -70,7 +70,7 @@ class RopCop():
         #instruct = SIM_disassemble_address(self.cpu, addr, 1, 0)
         #current_eip = self.mem_utils.getRegValue(self.cpu, 'eip')
         
-        esp = self.mem_utils.getRegValue(self.cpu, 'esp')
+        esp = self.mem_utils.getRegValue(self.cpu, 'sp')
         word_size = self.mem_utils.wordSize(self.cpu)
         if word_size == 4:
             return_to = self.mem_utils.readWord32(self.cpu, esp)
@@ -173,8 +173,8 @@ class RopCop():
         self.clearHap()
         self.watchROP(watching=False)
         self.lgr.debug('ropCop stopHap, call skipAndMail, disabled ROP watch')
-        eip = self.mem_utils.getRegValue(self.cpu, 'eip')
-        esp = self.mem_utils.getRegValue(self.cpu, 'esp')
+        eip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        esp = self.mem_utils.getRegValue(self.cpu, 'sp')
         if self.is_signal:
             pending_fault = self.top.pendingFault(target=self.cell_name)
             bm = "Signal handler eip:0x%x esp:0x%x would return to 0x%x pending_fault %r" % (eip, esp, ret_addr, pending_fault)
