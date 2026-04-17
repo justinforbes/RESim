@@ -91,7 +91,11 @@ class RunToModeChange():
             hap_clean.add("Core_Mode_Change", self.mode_hap)
             stop_action = hapCleaner.StopAction(hap_clean, flist=flist)
             self.stop_hap = self.top.RES_add_stop_callback(self.top.stopHap, stop_action, your_stop=True)
-            self.lgr.debug('run2User added stop_hap of %d' % self.stop_hap)
+            if self.stop_hap is not None:
+                self.lgr.debug('run2User added stop_hap of %d' % self.stop_hap)
+            else:
+                self.lgr.debug('run2User failed to set stop hap')
+                return
             simics_status = SIM_simics_is_running()
             if not simics_status:
                 self.lgr.debug('run2User continue')
