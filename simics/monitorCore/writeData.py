@@ -384,7 +384,7 @@ class WriteData():
         retval = None
         #self.lgr.debug('userBufWrite self.max_len is %d in data is %d bytes' % (self.max_len, len(self.in_data)))
         if self.current_packet > 1 and self.no_reset is not None:
-             self.lgr.debug('writeData userBufWrite, current packet %d, no reset so stop' % self.current_packet)
+             #self.lgr.debug('writeData userBufWrite, current packet %d, no reset so stop' % self.current_packet)
              SIM_break_simulation('writeData userBufWrite, no reset')
              if self.stop_callback is not None:
                  self.stop_callback()
@@ -486,7 +486,7 @@ class WriteData():
             self.lgr.error('writeData userBufWrite could not handle data parameters.')
         #self.lgr.debug('writeData userBufWrite tracing_io ? %r' % self.tracing_io)
         if not self.tracing_io and (self.stop_on_read or self.udp_header is not None or (self.pad_to_size is not None and self.pad_to_size > 0)):
-            self.lgr.debug('writeData userBufWrite call setCallHap')
+            #self.lgr.debug('writeData userBufWrite call setCallHap')
             self.setCallHap()
 
         if self.top.isWindows() and self.stop_on_read:
