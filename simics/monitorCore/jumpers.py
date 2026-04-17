@@ -209,7 +209,15 @@ class Jumpers():
 
         if replace:
             # use a byte array to hold the replacement bytes
-            to_addr = bytearray.fromhex(parts[1])
+            try:
+                if parts[1].startswith('0x'):
+                   val = parts[1][2:]
+                else:
+                   val = parts[1]
+                to_addr = bytearray.fromhex(val)
+            except:
+                self.lgr.error("jumpers Error reading %s from %s, bad jumper field %s should be hex" % (line, fname, parts[1]))
+ 
         else:
             try:
                 to_addr = int(parts[1], 16)
