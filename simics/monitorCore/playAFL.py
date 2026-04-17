@@ -276,12 +276,17 @@ class PlayAFL():
                 count= self.doWriteData()
             ''' generate a bookmark so we can return here after setting coverage breakpoints on target.  Bookmark must be set after data inject above'''
             self.lgr.debug('playAFL target_proc %s reset origin and set target to %s.  cycle: 0x%x' % (target_proc, target_cell, self.cpu.cycles))
-            self.top.resetOrigin()
+            self.restoreOrigin()
             self.top.setTarget(target_cell)
             self.top.debugProc(target_proc, self.playInitCallback, not_to_user=False)
         parts = cli.quiet_run_command('version')
         self.version_string = parts[0][0][2]
         self.did_exit = False
+
+    def restoreOrigin():
+        self.backstop.clearHang()
+        self.top.resetOrigin()
+        self.backstop.setHangCallback(self.hangCallback, self.hang_cycles)
 
     def ranToIO(self, dumb):
         self.commence_coverage = self.target_cpu.cycles - self.initial_cycle
@@ -395,7 +400,7 @@ class PlayAFL():
             self.exit_syscall = self.top.debugExitHap()
         elif self.target_proc is None:
             self.lgr.debug('playAFL finishInit target_proc None, call resetOrigin')
-            self.top.resetOrigin()
+            self.restoreOrigin()
         if self.target_proc is None:
             # otherwise traceBuffer set up in playInitCallback
             self.trace_buffer = self.top.traceBufferTarget(self.target_cell, msg='playAFL')
