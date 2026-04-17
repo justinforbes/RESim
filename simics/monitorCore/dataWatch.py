@@ -3396,6 +3396,10 @@ class DataWatch():
             self.lgr.debug('dataWatch handleMemStuff, dataWatch is stopped, return')
             return
         
+        # first fix up fun_addr so that it matches the actual function vice linkage stubs
+        if self.mem_something.fun is not None:
+            self.mem_something.fun_addr = self.fun_mgr.getFunEntry(self.mem_something.fun)
+         
         if self.mem_something.fun in self.mem_fun_entries and self.mem_something.fun_addr in self.mem_fun_entries[self.mem_something.fun] \
                and self.mem_something.fun not in funs_need_addr and self.mem_fun_entries[self.mem_something.fun][self.mem_something.fun_addr].disabled != True:
  
