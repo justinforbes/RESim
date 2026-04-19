@@ -192,7 +192,10 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
         for fun in sorted(blocks):
             #lgr.debug('call findBNTForFun for fun %s' % fun)
             this_list = findBNTForFun(target, hits, pre_hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet, no_reset, lgr, auto=auto)
-            bnt_list.extend(this_list)
+            if this_list is not None:
+                bnt_list.extend(this_list)
+            else:
+                lgr.debug('findBNT, got None from findBNTForFun %s' % fun)
     else:
         for fun in blocks:
             if blocks[fun]['name'] == fun_name:
