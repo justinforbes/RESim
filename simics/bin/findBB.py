@@ -107,7 +107,7 @@ class FindBB():
                     prog_offset = 0
                 self.prog_offsets[prog] = prog_offset
                 if lgr is not None:
-                    lgr.debug('trackio file %s load offset of %s is 0x%x' % (trackio, prog, prog_offset))
+                    lgr.debug('trackio file %s load offset of %s is 0x%x. Prog now loaded, will not see this debug for this prog file again.' % (trackio, prog, prog_offset))
             mark_list = tjson['marks']
             sorted_marks = sorted(mark_list, key=lambda x: x['cycle'])
             self.track_marks[prog][trackio] = sorted_marks
