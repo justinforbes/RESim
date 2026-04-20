@@ -8,7 +8,9 @@ if [ -z "$RESIM_FUZZ_ARCHIVE" ]; then
 fi
 if [ "$#" -ne 2 ]; then
     echo "arch-restore.sh <project> <workspace>"
-    echo "   Restore a workspace and afl files from the resim archive"
+    echo "   Restore a afl files from the resim archive.  If a workspace was archived, that will be restored as well."
+    echo "   The project is as given in the arch-tars.sh command.  The workspace is the AFL workspace name from which"
+    echo "   the arch-tars.sh command was issued."
     exit
 fi
 project=$1
