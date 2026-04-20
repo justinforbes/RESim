@@ -400,7 +400,8 @@ class PlayAFL():
             self.exit_syscall = self.top.debugExitHap()
         elif self.target_proc is None:
             self.lgr.debug('playAFL finishInit target_proc None, call resetOrigin')
-            self.restoreOrigin()
+            if self.dfile != 'oneplay' or self.afl_mode or self.search_list is not None:
+                self.restoreOrigin()
         if self.target_proc is None:
             # otherwise traceBuffer set up in playInitCallback
             self.trace_buffer = self.top.traceBufferTarget(self.target_cell, msg='playAFL')
