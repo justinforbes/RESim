@@ -142,7 +142,9 @@ def findBNTForFun(target, hits, pre_hits, fun_blocks, no_print, prog, prog_elf, 
     return retval
 
 def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=False, no_reset=False, auto=False):
-    lgr = resimUtils.getLogger('findBNT', '/tmp', level=None)
+    user = os.getenv('USER')
+    log_dir = '/tmp/%s' % user
+    lgr = resimUtils.getLogger('findBNT', log_dir, level=None)
     lgr.debug('findBNT begin')
 
     #ida_path = resimUtils.getIdaData(prog)
