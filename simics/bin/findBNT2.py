@@ -148,8 +148,17 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
     #ida_path = resimUtils.getIdaData(prog)
     prog_base = os.path.basename(prog)
 
+    hits = []
+    if target is not None:
+        user = os.getenv('USER')
+        os.system('genHitsFile.py %s' % target)
+        outfile = '/tmp/%s/%s.hits' % (user, target)
+        if os.path.isfile(outfile):
+            with open(outfile) as fh:
+                hits = json.load(fh)
+
     ida_path = resimUtils.getIdaDataFromIni(prog, ini, lgr=lgr)
-    print('prog: %s  ida_path is %s' % (prog, ida_path))
+    lgr.debug('prog: %s  ida_path is %s' % (prog, ida_path))
     bnt_list = []
     if target is None:
         fname = '%s.hits' % ida_path
@@ -160,11 +169,15 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
     lgr.debug('Using hits file %s prog: %s' % (fname, prog))
     ''' hits are now just flat lists without functions '''
     if not os.path.isfile(fname):
-        print('No file at %s.  Did you forget to specific the --target?' % fname)
-        return None
-    with open(fname) as fh:
-        hits = json.load(fh)
-
+        if len(hits) == 0:
+            print('No file at %s.  Did you forget to specific the --target?' % fname)
+            return None
+    else:
+        with open(fname) as fh:
+            these_hits = json.load(fh)
+        for h in these_hits:
+            if h not in hits:
+                hits.append(h)
     pre_hits = []
     pre_fname = '%s.pre.hits' % ida_path
     if os.path.isfile(pre_fname):
