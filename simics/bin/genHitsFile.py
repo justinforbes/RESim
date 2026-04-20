@@ -22,15 +22,20 @@ def main():
     hits = []
     for path in expaths1:
         cover = json.load(open(path))
-        print('doing %s' % path)
+        #print('doing %s' % path)
         for hit in cover:
             hit = int(hit)
             if hit not in hits:
                 hits.append(hit)
-    ofile = '/tmp/%s.hits' % args.target
+    user = os.getenv('USER')
+    try:
+        os.mkdir('/tmp/%s' % user)
+    except:
+        pass
+    ofile = '/tmp/%s/%s.hits' % (user, args.target)
     with open(ofile, 'w') as fh:
         fh.write(json.dumps(hits))
-    print('Found %d hits written to /tmp/%s.hits' % (len(hits), args.target))
+    print('Found %d hits written to ofile %s' % (len(hits), ofile))
     
     
 if __name__ == '__main__':
