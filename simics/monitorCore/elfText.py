@@ -122,11 +122,15 @@ def getText(path, lgr):
             parts = line.strip().split()
             if offset is None:
                 offset = int(parts[2], 16)
-            size = int(parts[4], 16)
+            this_size = int(parts[4], 16)
             if lgr is not None:
-                lgr.debug('readelf got LOAD offset 0x%x size 0x%x' % (offset, size))
+                lgr.debug('readelf got LOAD offset 0x%x this_size 0x%x' % (offset, this_size))
                 lgr.debug('from line %s' % line)
-            #lgr.debug('got size now 0x%x' % size)
+            if this_size != 0:
+                size = this_size
+                lgr.debug('got size now 0x%x' % size)
+            else:
+                lgr.debug('ignoring this size, using old size 0x%x' % size)
         elif line.startswith('LOAD') and is_dyn and not is_aarch64 and ' E ' in line:
             lgr.debug('found load in line %s' % line)
             # not quite, but better
@@ -135,8 +139,13 @@ def getText(path, lgr):
             parts = line.strip().split()
             addr_start = int(parts[2], 16)
             mem_size = int(parts[3], 16)
-            size = addr_start + mem_size
-            lgr.debug('got size now 0x%x offset %s' % (size, str(offset)))
+            this_size = addr_start + mem_size
+            lgr.debug('not is_aarch64 got this_size 0x%x offset %s' % (this_size, str(offset)))
+            if this_size != 0:
+                size = this_size
+                lgr.debug('got size now 0x%x' % size)
+            else:
+                lgr.debug('ignoring this size, using old size 0x%x' % size)
             if offset is None or offset == 0:
                 offset = int(parts[2], 16)
                 lgr.debug('got offset 0x%x' % offset)
@@ -153,6 +162,7 @@ def getText(path, lgr):
             if parts[0].strip() == '.text':
                 addr = int(parts[2], 16)
                 #print('sees .text set addr to 0x%x' % addr)
+                lgr.debug('sees .text set addr to 0x%x' % addr)
                 offset = int(parts[3], 16)
                 size = int(parts[4], 16)
             elif parts[0].strip() == '.plt':
