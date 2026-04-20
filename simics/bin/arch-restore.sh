@@ -16,7 +16,6 @@ fi
 project=$1
 workspace=$2
 here=$(pwd)
-base=$(basename $here)
 afl_seed=$AFL_DATA/seeds/$workspace
 afl_output=$AFL_DATA/output/$workspace
 if [[ -d $afl_seed ]]; then
@@ -43,7 +42,7 @@ fi
 mkdir $afl_seed
 mkdir $afl_output
 cd $afl_output
-cp $output_dir/$workspace.unique $base.unique
+cp $output_dir/$workspace.unique $workspace.unique
 tar -xf $sync_dirs || exit
 echo "Extracted sync dirs to $afl_output."
 cd $afl_seed
