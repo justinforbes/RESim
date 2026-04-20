@@ -17,8 +17,8 @@ project=$1
 workspace=$2
 here=$(pwd)
 base=$(basename $here)
-afl_seed=$AFL_DATA/seeds/$base
-afl_output=$AFL_DATA/output/$base
+afl_seed=$AFL_DATA/seeds/$workspace
+afl_output=$AFL_DATA/output/$workspace
 if [[ -d $afl_seed ]]; then
     echo "Seed directory exists at $afl_seed. Delete or move it before restoring."
     exit
