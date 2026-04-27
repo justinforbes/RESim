@@ -1013,3 +1013,7 @@ class WinDLLMap():
         else:
            self.lgr.debug('winDLL getFnameForSectionHandle tid %s not in sections' % tid)
         return retval
+
+    def isDynamic(self, path):
+        # TBD
+        return False
