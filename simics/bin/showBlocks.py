@@ -7,8 +7,14 @@ import sys
 import os
 import glob
 import json
+if len(sys.argv) < 2 or sys.argv[1] == '-h':
+    print('showBlocks.py target instance index')
+    print('or, showBlocks.py file')
+    exit(0)
+ 
 if os.path.isfile(sys.argv[1]):
-    hits1 = json.load(open(sys.argv[1]))
+    fname = sys.argv[1]
+    hits1 = json.load(open(fname))
 else:
     target = sys.argv[1]
     instance = sys.argv[2]

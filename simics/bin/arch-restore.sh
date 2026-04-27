@@ -8,15 +8,16 @@ if [ -z "$RESIM_FUZZ_ARCHIVE" ]; then
 fi
 if [ "$#" -ne 2 ]; then
     echo "arch-restore.sh <project> <workspace>"
-    echo "   Restore a workspace and afl files from the resim archive"
+    echo "   Restore a afl files from the resim archive.  If a workspace was archived, that will be restored as well."
+    echo "   The project is as given in the arch-tars.sh command.  The workspace is the AFL workspace name from which"
+    echo "   the arch-tars.sh command was issued."
     exit
 fi
 project=$1
 workspace=$2
 here=$(pwd)
-base=$(basename $here)
-afl_seed=$AFL_DATA/seeds/$base
-afl_output=$AFL_DATA/output/$base
+afl_seed=$AFL_DATA/seeds/$workspace
+afl_output=$AFL_DATA/output/$workspace
 if [[ -d $afl_seed ]]; then
     echo "Seed directory exists at $afl_seed. Delete or move it before restoring."
     exit
@@ -41,7 +42,7 @@ fi
 mkdir $afl_seed
 mkdir $afl_output
 cd $afl_output
-cp $output_dir/$workspace.unique $base.unique
+cp $output_dir/$workspace.unique $workspace.unique
 tar -xf $sync_dirs || exit
 echo "Extracted sync dirs to $afl_output."
 cd $afl_seed

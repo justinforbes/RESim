@@ -400,7 +400,8 @@ class PlayAFL():
             self.exit_syscall = self.top.debugExitHap()
         elif self.target_proc is None:
             self.lgr.debug('playAFL finishInit target_proc None, call resetOrigin')
-            self.restoreOrigin()
+            if self.dfile != 'oneplay' or self.afl_mode or self.search_list is not None:
+                self.restoreOrigin()
         if self.target_proc is None:
             # otherwise traceBuffer set up in playInitCallback
             self.trace_buffer = self.top.traceBufferTarget(self.target_cell, msg='playAFL')
@@ -856,9 +857,15 @@ class PlayAFL():
         ''' Record coverage, including cycles.  File will go in a "coverage" directory along side queue, etc. unless it is a one-off'''
         self.lgr.debug('playAFL recordHits %d' % len(hit_bbs))
         #hit_list = list(hit_bbs.keys())
+        user = ''
         if self.one_off:
-            print('Assume ad-hoc path, coverage (hits & cycles) stored in /tmp/playAFL.coverage')
-            fname = '/tmp/playAFL.coverage'
+            user = os.getenv('USER')
+            try:
+                os.mkdir('/tmp/%s' % user)
+            except:
+                pass 
+            fname = '/tmp/%s/playAFL.coverage' % user
+            print('Assume ad-hoc path, coverage (hits & cycles) stored in %s' % fname)
         else:
             fname = self.getHitsPath(self.index)
         self.lgr.debug('playAFL recordHits to file %s' % fname)
@@ -871,9 +878,9 @@ class PlayAFL():
             if hit not in self.all_hits:
                 self.all_hits.append(hit)
         if self.one_off:
-            print('Hits list (for IDA) stored %d hits in /tmp/playAFL.hits' % len(self.all_hits))
-            self.lgr.debug('playAFL recordHits Hits list (for IDA) stored %d hits in /tmp/playAFL.hits' % len(self.all_hits))
-            fname = '/tmp/playAFL.hits'
+            fname = '/tmp/%s/playAFL.hits' % user
+            print('Hits list (for IDA) stored %d hits in %s' % (len(self.all_hits), fname))
+            self.lgr.debug('playAFL recordHits Hits list (for IDA) stored %d hits in %s' % (len(self.all_hits), fname))
             with open(fname, 'w') as fh:
                 json.dump(self.all_hits, fh) 
         else:
