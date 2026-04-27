@@ -445,7 +445,11 @@ class FunMgr():
             parts = instruct[1].split()
             if parts[-1].strip().endswith(']'):
                 s = parts[-1]
-                content = s.split('[', 1)[1].split(']')[0]
+                try:
+                    content = s.split('[', 1)[1].split(']')[0]
+                except IndexError:
+                    self.lgr.debug('funMgr indirectCall baling on %s' % instruct[1])
+                    return None, None
                 #self.lgr.debug('funMgr indirectCall content <%s> eip: 0x%x' % (content, eip))
                 if content.startswith('rip+'):
                     offset_s = content[4:]
