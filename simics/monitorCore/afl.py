@@ -164,7 +164,8 @@ class AFL():
         self.pc_reg = self.cpu.iface.int_register.get_number('pc')
         self.addr = None
         self.orig_buffer = None
-        self.hang_cycles = defaultConfig.hangCycles()
+        self.hang_cycles = defaultConfig.hangCycles(afl=True)
+        self.lgr.debug('HANG_CYCLES is %d' % self.hang_cycles)
         #self.hang_cycles = 90000000
         #hang = os.getenv('HANG_CYCLES')
         #if hang is not None:
@@ -360,6 +361,8 @@ class AFL():
                 analysis_path = self.top.getAnalysisPath(self.fname)
                 if '/' not in self.fname:
                     prog_path = self.top.getProgPath(self.fname)
+                    if prog_path is None:
+                        prog_path = self.top.getProgPathFromAnalysis(analysis_path)
                     print('Relative path given, guessing you mean %s' % prog_path)
                     self.lgr.debug('afl Relative path given, guessing you mean %s' % prog_path)
                 else:
