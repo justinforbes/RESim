@@ -6089,12 +6089,16 @@ class GenMonitor():
             It also calls our stopHap, which 
         '''
         cpu, comm, this_tid = self.task_utils[self.target].curThread() 
-        self.lgr.debug('stopAndGo tid %s cycle 0x%x' % (this_tid, cpu.cycles))
-        SIM_run_alone(self.stopAndGoAlone, callback)
+        if cpu is not None:
+            self.lgr.debug('stopAndGo tid %s cycle 0x%x' % (this_tid, cpu.cycles))
+            SIM_run_alone(self.stopAndGoAlone, callback)
+        else:
+            self.lgr.error('stopAndGo failed to get cpu from curThread, trying stopAndGo anyway')
+            SIM_run_alone(self.stopAndGoAlone, callback)
 
     def stopAndGoAlone(self, callback, param=None):
-        cpu, comm, this_tid = self.task_utils[self.target].curThread() 
-        self.lgr.debug('stopAndGoAlone tid %s cycle 0x%x' % (this_tid, cpu.cycles))
+        #cpu, comm, this_tid = self.task_utils[self.target].curThread() 
+        #self.lgr.debug('stopAndGoAlone tid %s cycle 0x%x' % (this_tid, cpu.cycles))
         cpu = self.cell_config.cpuFromCell(self.target)
         if param is None:
             call_params = []
@@ -7059,6 +7063,10 @@ class GenMonitor():
         else:
             self.lgr.debug('getProgPath for None')
         return retval
+
+    def getProgPathFromAnalysis(self, full_analysis_path):
+        root_prefix = self.comp_dict[self.target]['RESIM_ROOT_PREFIX']
+        return resimUtils.getProgPathFromAnalysis(full_analysis_path, None, lgr=self.lgr, root_prefix=root_prefix)
 
     def findBytes(self, byte_string):
         byte_array = bytes.fromhex(byte_string)
