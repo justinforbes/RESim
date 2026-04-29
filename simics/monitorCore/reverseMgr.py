@@ -63,7 +63,11 @@ from simics import *
 import os
 import cli
 import logging
-import resimSimicsUtils
+NOUTILS = False
+try:
+    import resimSimicsUtils
+except:
+    NOUTILS = True
 class ReverseMgr():
     '''
     Initialize the ReverseMgr.
@@ -877,14 +881,15 @@ class ReverseMgr():
             eip = self.top.getEIP()
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             op_type = SIM_get_mem_op_type(memory)
-            op_type_string = resimSimicsUtils.transType(op_type)
+            if not NOUTILS:
+                op_type_string = resimSimicsUtils.transType(op_type)
 
-            if memory.logical_address == 0 and memory.physical_address is not None:
-                self.lgr.debug('reverseMgr breakCallback break num %d phys memory addr 0x%x cycles: 0x%x eip:0x%x  instruct %s op_type: %s' % (the_break, 
-                        memory.physical_address, self.cpu.cycles, eip, instruct[1], op_type_string))
-            else:
-                self.lgr.debug('reverseMgr breakCallback break num %d memory addr 0x%x cycles: 0x%x eip:0x%x  instruct %s op_type: %s' % (the_break, 
-                        memory.logical_address, self.cpu.cycles, eip, instruct[1], op_type_string))
+                if memory.logical_address == 0 and memory.physical_address is not None:
+                    self.lgr.debug('reverseMgr breakCallback break num %d phys memory addr 0x%x cycles: 0x%x eip:0x%x  instruct %s op_type: %s' % (the_break, 
+                            memory.physical_address, self.cpu.cycles, eip, instruct[1], op_type_string))
+                else:
+                    self.lgr.debug('reverseMgr breakCallback break num %d memory addr 0x%x cycles: 0x%x eip:0x%x  instruct %s op_type: %s' % (the_break, 
+                            memory.logical_address, self.cpu.cycles, eip, instruct[1], op_type_string))
         object_cycles = None 
         object_cell = the_obj.name.split('.')[0]
         if object_cell != self.our_cell:
