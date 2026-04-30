@@ -627,16 +627,16 @@ class WinTaskUtils():
         done = False
         got = []
         task_ptr = task_ptr_in
-        self.lgr.debug('winTaskUtils walk task_ptr 0x%x offset 0x%x ts_pid: 0x%x' % (task_ptr, offset, self.param.ts_pid))
+        #self.lgr.debug('winTaskUtils walk task_ptr 0x%x offset 0x%x ts_pid: 0x%x' % (task_ptr, offset, self.param.ts_pid))
         prev_pid = None
         while not done:
             if prev_pid != 4:
                 pid_ptr = self.mem_utils.getUnsigned(task_ptr + self.param.ts_pid)
-                self.lgr.debug('winTaskUtils walk got pid_ptr 0x%x from task_ptr 0x%x plus ts_pid' % (pid_ptr, task_ptr))
+                #self.lgr.debug('winTaskUtils walk got pid_ptr 0x%x from task_ptr 0x%x plus ts_pid' % (pid_ptr, task_ptr))
                 pid = self.mem_utils.readWord(self.cpu, pid_ptr)
                 if pid is not None:
                     got.append(task_ptr)
-                    self.lgr.debug('winTaskUtils walk got pid %d from task_ptr 0x%x' % (pid, task_ptr))
+                    #self.lgr.debug('winTaskUtils walk got pid %d from task_ptr 0x%x' % (pid, task_ptr))
                 else:
                     self.lgr.debug('got no pid for pid_ptr 0x%x' % pid_ptr)
                     #print('got no pid for pid_ptr 0x%x' % pid_ptr)
