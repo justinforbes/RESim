@@ -916,3 +916,21 @@ def hexInt(string):
     except:
         pass
     return retval
+
+def getSnapPathFromIni(ini):
+    retval = None
+    config = ConfigParser.ConfigParser()
+    config.optionxform = str
+    if not input_ini_file.endswith('.ini'):
+        ini_file = '%s.ini' % input_ini_file
+    else:
+        ini_file = input_ini_file
+    if not os.path.isfile(ini_file):
+        print('File not found: %s' % ini_file)
+        exit(1)
+    config.read(ini_file)
+    for name, value in config.items('ENV'):
+        if name == 'RUN_FROM_SNAP':
+            retval = value
+            break
+    return retval
