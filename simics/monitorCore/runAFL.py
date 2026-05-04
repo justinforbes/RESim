@@ -12,6 +12,8 @@ Each AFL/RESim pair is given a unique port number over which to communicate.
 import os
 import stat
 import sys
+import json
+import pickle
 import subprocess
 import argparse
 import shlex
@@ -195,6 +197,17 @@ def runAFLTilRestart(args, lgr):
         os.makedirs(afl_out)
     except:
         pass
+    meta_content = {}
+    meta_file = os.path.join(afl_out, 'meta.json')
+    args_dict = vars(args)
+    meta_content['afl_cmd'] = args_dict
+    snap_path = resimUtils.getSnapPathFromIni(args.ini)
+    debug_path = os.path.join(snap_path, 'debug_info.pickle')
+    debug_info = pickle.load(debug_path)
+    if 'comm' in debug_info:
+        meta_content['comm'] = debug_info['comm']
+    with open(meta_file, 'w') as fh:
+        fh.write(json.dumps(meta_content))
     glist = glob.glob('resim_*/')
     if args.continue_run == True:
         afl_seeds = '-'
