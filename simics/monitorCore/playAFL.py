@@ -433,6 +433,9 @@ class PlayAFL():
                 analysis_path = self.top.getAnalysisPath(self.fname)
                 if '/' not in self.fname:
                     prog_path = self.top.getProgPath(self.fname)
+                    if prog_path is None:
+                        root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
+                        prog_path = resimUtils.getProgPathFromAnalysis(analysis_path, None, lgr=self.lgr, root_prefix=root_prefix) 
                     print('Relative path given, guessing you mean %s' % prog_path)
                     self.lgr.debug('playAFL Relative path given, guessing you mean %s' % prog_path)
                 else:
