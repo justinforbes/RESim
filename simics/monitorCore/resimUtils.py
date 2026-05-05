@@ -6,6 +6,7 @@ import subprocess
 import elfText
 import json
 import re
+import glob
 import fnmatch
 import winProg
 import ntpath
@@ -934,3 +935,8 @@ def getSnapPathFromIni(ini):
             retval = value
             break
     return retval
+
+def getAllHits(full_path, root_prefix):
+    ida_data = getIdaData(full_path, root_prefix)
+    print('ida_data is %s' % ida_data)
+    
