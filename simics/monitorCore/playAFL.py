@@ -415,6 +415,10 @@ class PlayAFL():
                     else:
                         prog_path = self.target_proc
                     self.lgr.debug('playAFL finishInit fname is None, prog_path got %s' % prog_path)
+                else:
+                    full_path = self.top.getFullPath()
+                    analysis_path = self.top.getAnalysisPath(full_path)
+    
             else:
                 analysis_path = self.top.getAnalysisPath(self.fname)
                 if '/' not in self.fname:
@@ -872,6 +876,10 @@ class PlayAFL():
             if hit not in self.all_hits:
                 self.all_hits.append(hit)
         if self.one_off:
+            
+            full_path = self.top.getFullPath()
+            root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
+            #old_hits = resimUtils.getAllHits(full_path, root_prefix)
             fname = '/tmp/%s/playAFL.hits' % user
             print('Hits list (for IDA) stored %d hits in %s' % (len(self.all_hits), fname))
             self.lgr.debug('playAFL recordHits Hits list (for IDA) stored %d hits in %s' % (len(self.all_hits), fname))
