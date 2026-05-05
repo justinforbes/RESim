@@ -478,7 +478,13 @@ class WinTaskUtils():
                 if swap_r10:
                     frame['param1'] = self.mem_utils.getRegValue(self.cpu, 'r10')
             elif self.os_type == 'WINXP':
-                frame = self.frameForXPEnter()
+                cpl = memUtils.getCPL(self.cpu)
+                if cpl == 0:
+                    frame = self.frameForXPEnter()
+                else:
+                    for p in memUtils.param_map['x86_32']:
+                        frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['x86_32'][p])
+ 
             else:
                 self.lgr.error('winTaskUtils frameFromRegs bad word size?') 
         if not skip_sp:
