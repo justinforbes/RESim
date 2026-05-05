@@ -138,7 +138,8 @@ class Disassemble():
             else:
                 self.lgr.error('disassemble getProgBytes failed to get fname for addr 0x%x is fname %s' % (addr))
         else:
-            self.lgr.debug('disassemble getProgBytes got no fname for addr 0x%x' % addr)
+            #self.lgr.debug('disassemble getProgBytes got no fname for addr 0x%x' % addr)
+            pass
         return fname, load_addr, end 
 
     def getDisassemble(self, addr, force=False):
