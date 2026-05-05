@@ -922,10 +922,10 @@ def getSnapPathFromIni(ini):
     retval = None
     config = ConfigParser.ConfigParser()
     config.optionxform = str
-    if not input_ini_file.endswith('.ini'):
-        ini_file = '%s.ini' % input_ini_file
+    if not ini.endswith('.ini'):
+        ini_file = '%s.ini' % ini
     else:
-        ini_file = input_ini_file
+        ini_file = ini
     if not os.path.isfile(ini_file):
         print('File not found: %s' % ini_file)
         exit(1)

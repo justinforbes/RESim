@@ -203,7 +203,7 @@ def runAFLTilRestart(args, lgr):
     meta_content['afl_cmd'] = args_dict
     snap_path = resimUtils.getSnapPathFromIni(args.ini)
     debug_path = os.path.join(snap_path, 'debug_info.pickle')
-    debug_info = pickle.load(debug_path)
+    debug_info = pickle.load(open(debug_path, 'rb'))
     if 'comm' in debug_info:
         meta_content['comm'] = debug_info['comm']
     with open(meta_file, 'w') as fh:
