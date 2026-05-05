@@ -97,13 +97,8 @@ class PlayAFL():
         self.exit_eip = None
         self.commence_params = commence_params
         self.stop_hap_cycle = None
-        self.back_stop_cycle = None
         self.run = run
         self.hang_cycles = defaultConfig.hangCycles()
-        #self.hang_cycles = 90000000
-        #hang = os.getenv('HANG_CYCLES')
-        #if hang is not None:
-        #    self.hang_cycles = int(hang)
         self.addr_of_count = None
         self.cycle_event = None
         self.initial_cycle = self.target_cpu.cycles
@@ -195,22 +190,12 @@ class PlayAFL():
         self.call_break = None
         self.addr = None
         self.in_data = None
-        #self.backstop_cycles =   100000
         if self.afl_mode:
-            #if os.getenv('AFL_BACK_STOP_CYCLES') is not None:
-            #    self.backstop_cycles =   int(os.getenv('AFL_BACK_STOP_CYCLES'))
-            #    self.lgr.debug('afl AFL_BACK_STOP_CYCLES is %d' % self.backstop_cycles)
-            #else:
-            #    self.lgr.warning('no AFL_BACK_STOP_CYCLES defined, using default of 100000')
-            #    self.backstop_cycles =   1000000
             self.backstop_cycles = defaultConfig.aflBackstopCycles('AFL_BACK_STOP_CYCLES')
         else:
-            #self.backstop_cycles =   900000
-            #bsc = os.getenv('BACK_STOP_CYCLES')
-            #if bsc is not None:
-            #    self.backstop_cycles = int(bsc)
             self.backstop_cycles = defaultConfig.backstopCycles()
-        
+       
+        self.lgr.debug('playAFL backstop_cycles is %d (0x%x).  hang_cycles %d (0x%x)' % (self.backstop_cycles, self.backstop_cycles, self.hang_cycles, self.hang_cycles))
         if os.getenv('BACK_STOP_DELAY') is not None:
             self.backstop_delay =   int(os.getenv('BACK_STOP_DELAY'))
             self.lgr.debug('BACK_STOP_DELAY is %d' % self.backstop_delay)
@@ -283,10 +268,11 @@ class PlayAFL():
         self.version_string = parts[0][0][2]
         self.did_exit = False
 
-    def restoreOrigin():
-        self.backstop.clearHang()
-        self.top.resetOrigin()
-        self.backstop.setHangCallback(self.hangCallback, self.hang_cycles)
+    #def restoreOrigin():
+    #    self.backstop.clearHang()
+    #    self.top.resetOrigin()
+    #    self.lgr.debug('playAFL restoreOrigin call backsthop setHangCallback')
+    #    self.backstop.setHangCallback(self.hangCallback, self.hang_cycles)
 
     def ranToIO(self, dumb):
         self.commence_coverage = self.target_cpu.cycles - self.initial_cycle
@@ -441,6 +427,10 @@ class PlayAFL():
                 else:
                     prog_path = self.fname
             self.lgr.debug('playAFL call enableCoverage analysis_path is %s prog_path = %s fname %s cycle: 0x%x' % (analysis_path, prog_path, self.fname, self.cpu.cycles))
+            if analysis_path is None:
+                self.lgr.error('playAFL no analysis path.  Something is very wrong')
+                self.top.quit()
+                return
             self.coverage.enableCoverage(self.target_tid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
                afl=self.afl_mode, linear=self.linear, create_dead_zone=self.create_dead_zone, only_thread=self.only_thread, 
                fname=analysis_path, prog_path=prog_path, diag_hits=self.diag_hits)
@@ -659,6 +649,7 @@ class PlayAFL():
                 self.lgr.debug('playAFL goAlone is onePlay and not repeat, not called resetOrigin cycles:  0x%x' % self.cpu.cycles)
 
             if self.search_list is not None and self.backstop_cycles is not None and self.backstop_cycles > 0:
+                self.lgr.debug('playAFL goAlone call setFutreCycle')
                 self.backstop.setFutureCycle(self.backstop_cycles, now=False)
 
             if self.exit_syscall is not None:
@@ -1131,3 +1122,4 @@ class PlayAFL():
                     VT_restore_snapshot('origin')
             else:
                 SIM_restore_snapshot('origin')
+        self.backstop.setHangCallback(self.hangCallback, self.hang_cycles)
