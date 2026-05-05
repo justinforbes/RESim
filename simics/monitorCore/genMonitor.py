@@ -7375,7 +7375,9 @@ class GenMonitor():
         pc = self.mem_utils[self.target].getKReturnAddr(cpu)
         print('ELR is 0x%x' % pc)
 
-    def osType(self, target):
+    def osType(self, target=None):
+        if target is None:
+            target = self.target
         return self.os_type[target]
 
     def mftx(self):
