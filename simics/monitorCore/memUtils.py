@@ -624,7 +624,7 @@ class MemUtils():
                             if do_log:
                                 self.lgr.debug('memUtils v2pUserAddr  cpl %d  exec_mode_word_size %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (cpl, exec_mode_word_size, self.param.kernel_base, v, retval))
                             if ptable_info is not None:
-                                self.lgr.debug('memUtils v2pUserAddr *********** no idea if mapped in just a v & kernel_base. v: 0x%x  page table %s return None' % (v, ptable_info.valueString()))
+                                self.lgr.debug('memUtils v2pUserAddr *********** no idea if mapped in just a v & kernel_base. v: 0x%x  page table %s return None cycle: 0x%x' % (v, ptable_info.valueString(), cpu.cycles))
                                 retval = None
                             else:
                                 self.lgr.debug('memUtils v2pUserAddr *********** no idea if mapped in just a v & kernel_base. no ptable info v 0x%x' % v) 
