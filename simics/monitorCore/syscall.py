@@ -1295,6 +1295,8 @@ class Syscall():
                         self.lgr.debug('syscall socketParse check subcall %s in call_param %s against %s' % (call_param.subcall, call_param.name, socket_callname.lower()))
                         if call_param.subcall.lower() == socket_callname.lower():
                             got_good = True
+                            self.lgr.debug('syscall socketParse added callparam %s to exit_info' % call_param.name)
+                            addParam(exit_info, call_param)
                         else:
                             got_bad = True
                 if got_bad and not got_good:
@@ -3062,7 +3064,7 @@ class Syscall():
             #     callnum, self.stop_on_call))
             exit_info = self.syscallParse(callnum, callname, frame, cpu, tid, comm, self.syscall_info)
             if exit_info is not None:
-                self.lgr.debug('syscall exit_info not none callname %s my name %s' % (callname, self.name))
+                self.lgr.debug('syscall exit_info not none callname %s my name %s %d exit_info.call_params' % (callname, self.name, len(exit_info.call_params)))
                 if comm != 'tar':
                         ''' watch syscall exit unless call_params narrowed a search failed to find a match '''
                         tracing_all = False 
