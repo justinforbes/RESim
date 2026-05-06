@@ -1270,6 +1270,7 @@ class Syscall():
         if tid in self.comm_cache:
             comm = self.comm_cache[tid]
         ida_msg = None
+        word_size = self.mem_utils.wordSize(self.cpu, cpl=3)
         self.lgr.debug('socketParse callname %s exit_info.retval_addr %s' % (callname, exit_info.retval_addr))
         if callname == 'socketcall':        
             ''' must be 32-bit get params from struct '''
