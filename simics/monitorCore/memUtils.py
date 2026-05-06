@@ -765,7 +765,7 @@ class MemUtils():
         start = vaddr
         retval = ()
         while remain > 0:
-            self.lgr.debug('memUtils readBytes top loop remain %d, len retval %d' % (remain, len(retval)))
+            #self.lgr.debug('memUtils readBytes top loop remain %d, len retval %d' % (remain, len(retval)))
             count = min(remain, 1024)
             ps = self.v2p(cpu, start)
             if ps is not None:
