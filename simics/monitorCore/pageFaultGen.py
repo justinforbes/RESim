@@ -984,4 +984,5 @@ class PageFaultGen():
         self.pending_faults = {}
         self.pending_sigill = {}
         self.pending_double_faults.clear()
+        self.faulted_pages.clear()
 
