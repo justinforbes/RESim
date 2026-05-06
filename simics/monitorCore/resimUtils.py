@@ -937,6 +937,23 @@ def getSnapPathFromIni(ini):
     return retval
 
 def getAllHits(full_path, root_prefix):
+    retval = []
     ida_data = getIdaData(full_path, root_prefix)
-    print('ida_data is %s' % ida_data)
-    
+    #print('ida_data is %s' % ida_data)
+    base = os.path.basename(ida_data) 
+    parent = os.path.dirname(ida_data)
+    search = '*%s*.hits' % (base)
+    full_search = os.path.join(parent, search)
+    #print('search string %s' % full_search)
+    hit_files = glob.glob(full_search)
+    for fname in hit_files:
+        #print('fname %s' % fname)
+        full = os.path.join(parent, fname)
+        #print('found hits at %s' % full)
+        with open(full) as fh:
+            these_hits = json.load(fh)
+            for h in these_hits:
+                if h not in retval:
+                    retval.append(h)
+    #print('found %d total hits' % len(retval))
+    return retval 
