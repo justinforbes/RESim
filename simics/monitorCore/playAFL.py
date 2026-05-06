@@ -235,6 +235,7 @@ class PlayAFL():
         
         self.snap_name = snap_name
         self.no_page_faults = no_page_faults
+        self.prog_path = None
         if not self.loadPickle(snap_name):
             print('No AFL data stored for cell %s in checkpoint %s, cannot play AFL.' % (self.cell_name, snap_name))
             self.lgr.error('playAFL No AFL data stored for cell %s in checkpoint %s, cannot play AFL.' % (self.cell_name, snap_name))
@@ -406,15 +407,14 @@ class PlayAFL():
         if self.coverage is not None:
             full_path = None
             analysis_path = None
-            prog_path = None
             if self.fname is None:
                 if self.target_proc is not None:
                     analysis_path = self.top.getAnalysisPath(self.target_proc)
                     if '/' not in self.target_proc:
-                        prog_path = self.top.getProgPath(self.target_proc, target=self.target_cell)
+                        self.prog_path = self.top.getProgPath(self.target_proc, target=self.target_cell)
                     else:
-                        prog_path = self.target_proc
-                    self.lgr.debug('playAFL finishInit fname is None, prog_path got %s' % prog_path)
+                        self.prog_path = self.target_proc
+                    self.lgr.debug('playAFL finishInit fname is None, self.prog_path got %s' % self.prog_path)
                 else:
                     full_path = self.top.getFullPath()
                     analysis_path = self.top.getAnalysisPath(full_path)
@@ -422,22 +422,22 @@ class PlayAFL():
             else:
                 analysis_path = self.top.getAnalysisPath(self.fname)
                 if '/' not in self.fname:
-                    prog_path = self.top.getProgPath(self.fname)
-                    if prog_path is None:
+                    self.prog_path = self.top.getProgPath(self.fname)
+                    if self.prog_path is None:
                         root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
-                        prog_path = resimUtils.getProgPathFromAnalysis(analysis_path, None, lgr=self.lgr, root_prefix=root_prefix) 
-                    print('Relative path given, guessing you mean %s' % prog_path)
-                    self.lgr.debug('playAFL Relative path given, guessing you mean %s' % prog_path)
+                        self.prog_path = resimUtils.getProgPathFromAnalysis(analysis_path, None, lgr=self.lgr, root_prefix=root_prefix) 
+                    print('Relative path given, guessing you mean %s' % self.prog_path)
+                    self.lgr.debug('playAFL Relative path given, guessing you mean %s' % self.prog_path)
                 else:
-                    prog_path = self.fname
-            self.lgr.debug('playAFL call enableCoverage analysis_path is %s prog_path = %s fname %s cycle: 0x%x' % (analysis_path, prog_path, self.fname, self.cpu.cycles))
+                    self.prog_path = self.fname
+            self.lgr.debug('playAFL call enableCoverage analysis_path is %s self.prog_path = %s fname %s cycle: 0x%x' % (analysis_path, self.prog_path, self.fname, self.cpu.cycles))
             if analysis_path is None:
                 self.lgr.error('playAFL no analysis path.  Something is very wrong')
                 self.top.quit()
                 return
             self.coverage.enableCoverage(self.target_tid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
                afl=self.afl_mode, linear=self.linear, create_dead_zone=self.create_dead_zone, only_thread=self.only_thread, 
-               fname=analysis_path, prog_path=prog_path, diag_hits=self.diag_hits)
+               fname=analysis_path, prog_path=self.prog_path, diag_hits=self.diag_hits)
             self.lgr.debug('playAFL backfrom enableCoverage')
             if self.linear:
                 self.lgr.debug('playAFL, linear use context manager to watch tasks')
@@ -876,10 +876,6 @@ class PlayAFL():
             if hit not in self.all_hits:
                 self.all_hits.append(hit)
         if self.one_off:
-            
-            full_path = self.top.getFullPath()
-            root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
-            #old_hits = resimUtils.getAllHits(full_path, root_prefix)
             fname = '/tmp/%s/playAFL.hits' % user
             print('Hits list (for IDA) stored %d hits in %s' % (len(self.all_hits), fname))
             self.lgr.debug('playAFL recordHits Hits list (for IDA) stored %d hits in %s' % (len(self.all_hits), fname))
@@ -893,24 +889,20 @@ class PlayAFL():
         self.reportNewHits()
 
     def reportNewHits(self):
-            prog_path = self.top.getProgName(self.target_tid, target=self.target_cell)
-            if prog_path is not None:
-                hits_path = self.top.getIdaData(prog_path, target=self.cell_name)
-                self.lgr.debug('playAFL recordHits prog_path %s hits path from getIdaData %s' % (prog_path, hits_path))
-
-                all_prev_hits_path = '%s.hits' % hits_path
-                if os.path.isfile(all_prev_hits_path):
-                    all_prev_hits = json.load(open(all_prev_hits_path))
-                    count = 0
-                    for hit in self.all_hits:
-                        if hit not in all_prev_hits:
-                            if self.show_new_hits:
-                                print('New hit found at 0x%x' % hit)
-                            count = count+1
-                    if count == 0:
-                        print('No new hits.')
-                    else:
-                        print('Found %d new hits that were not in %s' % (count, all_prev_hits_path))
+        if self.prog_path is not None:
+            full_path = self.top.getFullPath(self.prog_path)
+            root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
+            old_hits = resimUtils.getAllHits(full_path, root_prefix)
+            count = 0
+            for hit in self.all_hits:
+                if hit not in old_hits:
+                    if self.show_new_hits:
+                        print('New hit found at 0x%x' % hit)
+                    count = count+1
+            if count == 0:
+                print('No new hits that were not already in RESIM_IDA_DATA.')
+            else:
+                print('Found %d new hits that were not in RESIM_IDA_DATA' % (count))
 
     def recordExits(self, path):
         ''' exits will go in a "exits" directory along side queue, etc. '''
