@@ -81,10 +81,14 @@ def getIdaDataFromIni(prog, ini, lgr=None):
                 print('ERROR no path found for prog %s' % prog)
                 return retval
             prog_relative = full_prog[len(root_fs)+1:]
+            if lgr is not None:
+                lgr.debug('getIdaDataFromIni prog_relative is %s' % prog_relative)
         base = os.path.basename(root_fs)
         root_parent = os.path.basename(os.path.dirname(root_fs))
         #retval = os.path.join(resim_ida_data, base, prog, prog)
         retval = os.path.join(resim_ida_data, root_parent, base, prog_relative)
+        if lgr is not None:
+            lgr.debug('getIdaDataFromIni retval is %s' % retval)
     return retval
 
 def getIdaData(full_path, root_prefix, lgr=None):
