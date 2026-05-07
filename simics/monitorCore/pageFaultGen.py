@@ -312,7 +312,8 @@ class PageFaultGen():
         sp = self.mem_utils.getRegValue(cpu, 'sp')
         if sp == 0:
             self.lgr.error('pageFaultGen pageFaultHap sp is 0, arm regs confusion?')
-            self.top.quit()
+            #SIM_break_simulation('remove this')
+            #self.top.quit()
             return
         user_ip_addr = sp + self.mem_utils.WORD_SIZE
         #self.lgr.debug('pageFaultGen pageFaultHap user_ip_addr is 0x%x' % user_ip_addr)
