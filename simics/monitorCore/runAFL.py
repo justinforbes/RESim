@@ -203,11 +203,14 @@ def runAFLTilRestart(args, lgr):
     meta_content['afl_cmd'] = args_dict
     snap_path = resimUtils.getSnapPathFromIni(args.ini)
     debug_path = os.path.join(snap_path, 'debug_info.pickle')
-    debug_info = pickle.load(open(debug_path, 'rb'))
-    if 'comm' in debug_info:
-        meta_content['comm'] = debug_info['comm']
-    with open(meta_file, 'w') as fh:
-        fh.write(json.dumps(meta_content))
+    if os.path.isfile(debug_path):
+        debug_info = pickle.load(open(debug_path, 'rb'))
+        if 'comm' in debug_info:
+            meta_content['comm'] = debug_info['comm']
+        with open(meta_file, 'w') as fh:
+            fh.write(json.dumps(meta_content))
+    else:
+        lgr.debug('runAFL no pickle at %s' % debug_path)
     glist = glob.glob('resim_*/')
     if args.continue_run == True:
         afl_seeds = '-'
@@ -273,7 +276,7 @@ def runAFLTilRestart(args, lgr):
         for instance in glist:
             fuzzid = '%s_%s' % (hostname, instance[:-1])
             if not os.path.isdir(instance):
-                self.lgr.debug('No instance at %s, skip' % instance)
+                lgr.debug('No instance at %s, skip' % instance)
                 continue
             os.chdir(instance)
             if not args.no_afl:
