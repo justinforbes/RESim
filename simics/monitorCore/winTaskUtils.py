@@ -77,6 +77,7 @@ class WinTaskUtils():
         self.phys_current_task = None
         # physical address of where to find the cr3 value
         self.phys_saved_cr3 = None
+        self.task_before_lost = None
 
         if os_type == 'WINXP':
             self.THREAD_HEAD = param.thread_offset_in_prec
@@ -165,6 +166,8 @@ class WinTaskUtils():
                     self.phys_current_task = value['current_task_phys']
                     if 'saved_cr3_phys' in value:
                         self.phys_saved_cr3 = value['saved_cr3_phys']
+                    if 'task_before_lost' in value:
+                        self.task_before_lost = value['task_before_lost']
                     if 'system_proc_rec' in value and value['system_proc_rec'] is not None:
                         self.system_proc_rec = value['system_proc_rec']
                         self.lgr.debug('winTaskUtils, cell %s got system_proc_rec 0x%x' % (self.cell_name, self.system_proc_rec))
@@ -302,7 +305,7 @@ class WinTaskUtils():
             ptr_phys = self.mem_utils.v2p(self.cpu, ptr, do_log=False)
             #self.lgr.debug('winTaskUtils getCurProcRec got ptr_phys 0x%x reading ptr 0x%x (cur_thread + 0x%x' % (ptr_phys, ptr, self.param.proc_ptr))
             if ptr_phys is None:
-               self.lgr.debug('winTaskUtils getCurProcRec got ptr_phys is none for ptr 0x%x' % ptr)
+               #self.lgr.debug('winTaskUtils getCurProcRec got ptr_phys is none for ptr 0x%x' % ptr)
                if ptr > self.param.kernel_base: 
                     try:
                         phys_block = self.cpu.iface.processor_info.logical_to_physical(ptr, Sim_Access_Read)
@@ -322,6 +325,9 @@ class WinTaskUtils():
         if retval is not None:
             retval = self.mem_utils.getUnsigned(retval)
             #self.lgr.debug('winTaskUtils getCurProcRec returning 0x%x' % retval)
+            if retval == 0 and self.task_before_lost is not None:
+                retval = self.task_before_lost
+                self.lgr.debug('winTaskUtils getCurProcRec was zero, returning task_before_lost 0x%x' % retval)
         return retval
 
     def getMemUtils(self):
@@ -554,6 +560,7 @@ class WinTaskUtils():
         if self.phys_saved_cr3 is not None:
             dict_val['saved_cr3_phys'] = self.phys_saved_cr3
         dict_val['system_proc_rec'] = self.system_proc_rec 
+        dict_val['task_before_lost'] = self.task_before_lost 
         pickle.dump(dict_val , open( phys_current_task_file, "wb" ) )
         exec_addrs_file = os.path.join('./', fname, self.cell_name, 'exec_addrs.pickle')
         pickle.dump( self.program_map, open( exec_addrs_file, "wb" ) )
@@ -1296,3 +1303,9 @@ class WinTaskUtils():
                 retval.append(thread)          
         self.lgr.debug('getThreadList got %d threads' % len(retval))
         return retval
+
+    def switchedToUnknown(self):
+        cur = self.getCurProcRec()
+        self.lgr.debug('winTaskUtils switchedToUnknown, saving cur of 0x%x' % cur)
+        self.task_before_lost = cur
+

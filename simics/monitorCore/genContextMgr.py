@@ -716,6 +716,7 @@ class GenContextMgr():
                 return
             if proc_addr == 0:
                 self.lgr.debug('contextManager changedThread proc_addr is zero reading from ptr 0x%x cycle: 0x%x' % (ptr, self.cpu.cycles))
+                self.task_utils.switchedToUnknown()
                 return
             pid = self.mem_utils.readWord32(cpu, proc_addr + self.param.ts_pid)
             if pid is None:
