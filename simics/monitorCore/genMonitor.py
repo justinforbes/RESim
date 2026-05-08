@@ -5181,7 +5181,7 @@ class GenMonitor():
             self.traceFiles[self.target].markLogs(self.dataWatch[target_cell])
         self.rmDebugWarnHap()
         self.checkOnlyIgnore()
-        self.lgr.debug('genMonitor injectIO create instance')
+        self.lgr.debug('genMonitor injectIO create instance, run_from_snap is %s' % self.run_from_snap)
         if no_backstop:
             backstop = None
         else:
