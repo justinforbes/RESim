@@ -33,6 +33,7 @@ def main():
     parser.add_argument('-a', '--all', action='store_true', help='Look at all queue files, not just unique files.')
     parser.add_argument('-p', '--prog', action='store', help='Optional program name, do not provide this unless missing from afl meta data.')
     args = parser.parse_args()
+    lgr = resimUtils.getLogger('genHitsFile', '/tmp', level=None)
 
     hits = genHits(args.target, args.all)
 
@@ -49,7 +50,7 @@ def main():
     if prog_name is None:
         print('Unable to find the program name in afl meta data, please provide it with the --prog option.')
         exit(0) 
-    ida_data = resimUtils.getIdaDataFromIni(prog_name, args.ini)
+    ida_data = resimUtils.getIdaDataFromIni(prog_name, args.ini, lgr=lgr)
     parent = os.path.dirname(ida_data)
     try:
         os.makedirs(parent)
