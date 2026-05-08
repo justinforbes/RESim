@@ -275,7 +275,7 @@ class WriteData():
             if self.top.isWindows() and self.dataWatch is not None:
                 #self.lgr.debug('writeData writeKdata, use winDelay to set data watch ''')
                 dum, comm, tid = self.top.getCurrentProc(target_cpu=self.cpu)
-                exit_info = syscall.ExitInfo(None, self.cpu, tid, None, None, None, None)
+                exit_info = syscall.ExitInfo(None, self.cpu, tid, None, None, None, None, None)
                 exit_info.retval_addr = self.user_space_addr
                 exit_info.count_addr = self.addr_of_count
                 exit_info.delay_count_addr = self.addr_of_count
@@ -285,8 +285,6 @@ class WriteData():
                 asynch_handler.setDataWatch(self.dataWatch, True)
                 asynch_handler.toUserAlone(None)
 
-          
-    
     def write(self, record=False):
         ''' Write data into an application buffer or the kernel buffer, depending on information 
             recorded during the prepInject '''
